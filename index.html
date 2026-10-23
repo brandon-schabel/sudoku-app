@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f4f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10141c" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="A clean, accessible Sudoku game with notes, hints, undo, and offline play.">
+  <title>Sudoku</title>
+  <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+PHJlY3Qgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByeD0iMTIiIGZpbGw9IiMyNTYzZWIiLz48ZyBmaWxsPSJub25lIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMyI+PHJlY3QgeD0iOCIgeT0iOCIgd2lkdGg9IjQ4IiBoZWlnaHQ9IjQ4IiByeD0iMyIvPjxwYXRoIGQ9Ik0yNCA4djQ4TTQwIDh2NDhNOCAyNGg0OE04IDQwaDQ4Ii8+PC9nPjx0ZXh0IHg9IjMyIiB5PSIzOSIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iNzAwIiBmaWxsPSIjZmZmZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj41PC90ZXh0Pjwvc3ZnPg==">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#board">Skip to board</a>
+
+  <div class="app" id="app">
+    <header class="app-header">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 32 32" width="32" height="32" focusable="false">
+            <rect x="1" y="1" width="30" height="30" rx="7" fill="currentColor" opacity="0.14"></rect>
+            <path d="M11 3v26M21 3v26M3 11h26M3 21h26" fill="none" stroke="currentColor" stroke-width="2"></path>
+          </svg>
+        </span>
+        <h1 class="app-title">Sudoku</h1>
+      </div>
+
+      <div class="header-controls">
+        <div class="control-group">
+          <label class="control-label" for="difficulty">Difficulty</label>
+          <select class="difficulty-select" id="difficulty" name="difficulty">
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+            <option value="expert">Expert</option>
+          </select>
+        </div>
+
+        <button class="btn btn-primary" id="new-game" type="button">New Game</button>
+
+        <div class="timer-group">
+          <span class="timer" id="timer" role="timer" aria-label="Elapsed time">00:00</span>
+          <button class="btn btn-quiet" id="pause" type="button" aria-pressed="false">Pause</button>
+        </div>
+
+        <button class="btn btn-quiet theme-toggle" id="theme-toggle" type="button" aria-label="Theme: auto. Activate to switch to light.">Theme: Auto</button>
+      </div>
+    </header>
+
+    <main class="game-layout">
+      <section class="board-card" aria-label="Puzzle">
+        <div class="board-wrap">
+          <div class="board" id="board" role="grid" aria-label="Sudoku board"></div>
+          <div class="pause-overlay" id="pause-overlay" hidden>
+            <span class="pause-label">Paused</span>
+            <span class="pause-hint">Press P or Space to resume</span>
+          </div>
+        </div>
+        <p class="board-caption">Use the arrow keys to move, 1&ndash;9 to enter a digit.</p>
+      </section>
+
+      <aside class="sidebar" aria-label="Game controls">
+        <div class="stats" aria-label="Game statistics">
+          <span class="stat" id="mistakes">Mistakes: 0/3</span>
+          <span class="stat" id="hints">Hints: 0</span>
+        </div>
+
+        <div class="pad-section">
+          <h2 class="section-title" id="number-pad-title">Numbers</h2>
+          <div class="number-pad" id="number-pad" role="group" aria-labelledby="number-pad-title"></div>
+        </div>
+
+        <div class="action-section">
+          <h2 class="section-title">Actions</h2>
+          <div class="actions">
+            <button class="btn action-btn" id="notes" type="button" aria-pressed="false">Notes</button>
+            <button class="btn action-btn" id="erase" type="button">Erase</button>
+            <button class="btn action-btn" id="undo" type="button">Undo</button>
+            <button class="btn action-btn" id="redo" type="button">Redo</button>
+            <button class="btn action-btn" id="hint" type="button">Hint</button>
+          </div>
+        </div>
+
+        <div class="legend-section">
+          <h2 class="section-title">Shortcuts</h2>
+          <dl class="legend">
+            <div class="legend-row"><dt><kbd>1</kbd>&ndash;<kbd>9</kbd></dt><dd>Enter digit / note</dd></div>
+            <div class="legend-row"><dt><kbd>Arrows</kbd></dt><dd>Move selection</dd></div>
+            <div class="legend-row"><dt><kbd>N</kbd></dt><dd>Toggle notes</dd></div>
+            <div class="legend-row"><dt><kbd>E</kbd> / <kbd>Del</kbd></dt><dd>Erase</dd></div>
+            <div class="legend-row"><dt><kbd>Ctrl</kbd>+<kbd>Z</kbd></dt><dd>Undo / redo</dd></div>
+            <div class="legend-row"><dt><kbd>H</kbd></dt><dd>Hint</dd></div>
+            <div class="legend-row"><dt><kbd>P</kbd> / <kbd>Space</kbd></dt><dd>Pause / resume</dd></div>
+            <div class="legend-row"><dt><kbd>M</kbd></dt><dd>Change theme</dd></div>
+          </dl>
+        </div>
+      </aside>
+    </main>
+
+    <footer class="app-footer">
+      <p>Mistakes are limited to 3 for the game-over prompt; you may keep playing after it.</p>
+    </footer>
+
+    <div class="modal-overlay" id="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-body" hidden>
+      <div class="modal">
+        <h2 class="modal-title" id="modal-title"></h2>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-actions" id="modal-actions"></div>
+      </div>
+    </div>
+
+    <p class="sr-only" id="sr-status" role="status" aria-live="polite" aria-atomic="true"></p>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
