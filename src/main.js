@@ -25,6 +25,7 @@ let game = null;
 let ui = null;
 let timerId = null;
 let lastSavedAt = 0;
+let pauseMenuOpen = false;
 
 function firstEmptyIndex(state) {
   const index = state.values.findIndex((value) => value === 0);
@@ -55,7 +56,8 @@ function render() {
     noteMode,
     conflicts: findConflicts(state.values),
     paused: isPaused(),
-    theme
+    theme,
+    selectedDifficulty
   });
 }
 
@@ -64,10 +66,39 @@ function save() {
   lastSavedAt = Date.now();
 }
 
+function closePauseMenu({ resume = true } = {}) {
+  if (!pauseMenuOpen) return;
+  pauseMenuOpen = false;
+  ui.closePauseMenu();
+  if (resume && !game.state.completed) game.resume();
+  save();
+  render();
+  if (resume) ui.announce("Timer resumed.");
+}
+
+function openPauseMenu() {
+  if (!game || game.state.completed || ui.isModalOpen()) return;
+  if (game.state.running) game.pause();
+  pauseMenuOpen = true;
+  save();
+  render();
+  ui.openPauseMenu({
+    difficulty: selectedDifficulty,
+    theme,
+    hasProgress: hasProgress()
+  });
+  ui.announce("Game paused.");
+}
+
 function handleEvent() {
   const event = game.state.lastEvent;
   if (!event) return false;
   game.state.lastEvent = null;
+
+  if (pauseMenuOpen) {
+    pauseMenuOpen = false;
+    ui.closePauseMenu({ restoreFocus: false });
+  }
 
   if (event === "gameover") {
     ui.showModal("gameover", { mistakes: game.state.mistakes });
@@ -132,9 +163,12 @@ function startNewGame(force) {
   game = nextGame;
   selectedIndex = firstEmptyIndex(game.state);
   noteMode = false;
+  pauseMenuOpen = false;
+  ui.closePauseMenu({ restoreFocus: false });
   ui.closeModal();
   save();
   render();
+  ui.focusCell(selectedIndex);
   ui.announce(`New ${selectedDifficulty} game started.`);
 }
 
@@ -238,15 +272,18 @@ function dispatch(intent) {
 
     case "pause": {
       if (state.completed) return;
-      game.pauseToggle();
-      save();
-      render();
-      ui.announce(game.state.running ? "Timer resumed." : "Game paused.");
+      if (pauseMenuOpen) closePauseMenu({ resume: true });
+      else openPauseMenu();
+      return;
+    }
+
+    case "resume": {
+      closePauseMenu({ resume: true });
       return;
     }
 
     case "new-game": {
-      startNewGame(false);
+      startNewGame(Boolean(intent.force));
       return;
     }
 
@@ -255,16 +292,36 @@ function dispatch(intent) {
       return;
     }
 
+    case "restart": {
+      if (!intent.force && hasProgress()) return;
+      game.restart();
+      selectedIndex = firstEmptyIndex(game.state);
+      noteMode = false;
+      if (pauseMenuOpen) {
+        pauseMenuOpen = false;
+        ui.closePauseMenu({ restoreFocus: false });
+      }
+      save();
+      render();
+      ui.focusCell(selectedIndex);
+      ui.announce("Puzzle restarted.");
+      return;
+    }
+
     case "difficulty": {
       if (Object.prototype.hasOwnProperty.call(DIFFICULTIES, intent.difficulty)) {
         selectedDifficulty = intent.difficulty;
+        ui.setDifficulty(selectedDifficulty);
+        render();
         ui.announce(`Difficulty set to ${selectedDifficulty}.`);
       }
       return;
     }
 
     case "theme": {
-      theme = nextTheme(theme);
+      theme = THEME_ORDER.includes(intent.theme)
+        ? intent.theme
+        : nextTheme(theme);
       saveSettings({ theme });
       applyTheme();
       render();
@@ -294,8 +351,34 @@ function isTextEntry(target) {
 }
 
 function handleKeydown(event) {
+  if (event.defaultPrevented) return;
   if (ui.isModalOpen()) return;
   if (isTextEntry(event.target)) return;
+
+  if (pauseMenuOpen) {
+    const pauseKey = event.key.toLowerCase();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      dispatch({ type: "resume" });
+      return;
+    }
+    if (pauseKey === "p") {
+      event.preventDefault();
+      dispatch({ type: "resume" });
+      return;
+    }
+    if (event.key === " " || event.key === "Spacebar") {
+      const target = event.target;
+      const interactive = target && target.closest
+        ? target.closest("button, summary")
+        : null;
+      if (interactive) return;
+      event.preventDefault();
+      dispatch({ type: "resume" });
+      return;
+    }
+    return;
+  }
 
   const modifier = event.metaKey || event.ctrlKey;
   const key = event.key;
@@ -316,6 +399,12 @@ function handleKeydown(event) {
   }
 
   if (event.altKey) return;
+
+  if (key === "Escape") {
+    event.preventDefault();
+    dispatch({ type: "pause" });
+    return;
+  }
 
   if (/^[1-9]$/.test(key)) {
     event.preventDefault();
@@ -379,12 +468,23 @@ function startTimerLoop() {
 }
 
 function handleVisibilityChange() {
-  if (!document.hidden) return;
-  const changed = game.pause();
-  save();
-  if (changed) {
-    render();
-    ui.announce("Game paused automatically while the tab was hidden.");
+  if (document.hidden) {
+    if (game.state.running) {
+      game.pause();
+      save();
+      render();
+      ui.announce("Game paused automatically while the tab was hidden.");
+    }
+    return;
+  }
+
+  if (
+    !game.state.running &&
+    !game.state.completed &&
+    !ui.isModalOpen() &&
+    !pauseMenuOpen
+  ) {
+    openPauseMenu();
   }
 }
 
@@ -396,7 +496,10 @@ function handleSystemThemeChange() {
 
 function initialGame() {
   const restored = loadGame();
-  if (restored) return restored;
+  if (restored) {
+    if (!restored.state.completed) restored.resume();
+    return restored;
+  }
   const fresh = Game.create("easy");
   saveGame(fresh.toJSON());
   return fresh;
@@ -409,6 +512,7 @@ selectedIndex = firstEmptyIndex(game.state);
 ui = createUI({ root, dispatch });
 ui.setDifficulty(selectedDifficulty);
 render();
+save();
 lastSavedAt = Date.now();
 startTimerLoop();
 

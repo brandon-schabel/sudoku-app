@@ -2,6 +2,8 @@ const SIZE = 9;
 const CELL_COUNT = 81;
 const MISTAKE_LIMIT = 3;
 const THEME_ORDER = ["auto", "light", "dark"];
+const FOCUSABLE_SELECTOR =
+  'button:not(:disabled), a[href], summary, input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 const difficultyLabel = (value) =>
   typeof value === "string" && value.length > 0
@@ -63,6 +65,32 @@ function nextTheme(theme) {
   return THEME_ORDER[(index < 0 ? 0 : index + 1) % THEME_ORDER.length];
 }
 
+function focusableWithin(container) {
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+    (el) => !el.disabled && el.offsetParent !== null
+  );
+}
+
+function trapFocus(event, container) {
+  const focusable = focusableWithin(container);
+  if (focusable.length === 0) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey) {
+    if (active === first || !container.contains(active)) {
+      event.preventDefault();
+      last.focus();
+    }
+  } else if (active === last || !container.contains(active)) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 export function createUI({ root, dispatch }) {
   if (!root) throw new Error("createUI requires a root element");
   if (typeof dispatch !== "function") {
@@ -74,18 +102,32 @@ export function createUI({ root, dispatch }) {
     pauseOverlay: root.querySelector("#pause-overlay"),
     timer: root.querySelector("#timer"),
     pause: root.querySelector("#pause"),
-    themeToggle: root.querySelector("#theme-toggle"),
     mistakes: root.querySelector("#mistakes"),
+    mistakesValue: root.querySelector("#mistakes-value"),
     hints: root.querySelector("#hints"),
+    hintsValue: root.querySelector("#hints-value"),
+    mistakesSide: root.querySelector("#mistakes-side"),
+    hintsSide: root.querySelector("#hints-side"),
     numberPad: root.querySelector("#number-pad"),
     notes: root.querySelector("#notes"),
     erase: root.querySelector("#erase"),
     undo: root.querySelector("#undo"),
     redo: root.querySelector("#redo"),
     hint: root.querySelector("#hint"),
+    pauseMenu: root.querySelector("#pause-menu"),
+    pauseSheet: root.querySelector("#pause-sheet"),
+    pauseClose: root.querySelector("#pause-close"),
+    resume: root.querySelector("#resume"),
+    difficultyPicker: root.querySelector("#difficulty-picker"),
+    themePicker: root.querySelector("#theme-picker"),
     newGame: root.querySelector("#new-game"),
-    difficulty: root.querySelector("#difficulty"),
+    restart: root.querySelector("#restart"),
+    pauseConfirm: root.querySelector("#pause-confirm"),
+    pauseConfirmText: root.querySelector("#pause-confirm-text"),
+    confirmCancel: root.querySelector("#confirm-cancel"),
+    confirmOk: root.querySelector("#confirm-ok"),
     modalOverlay: root.querySelector("#modal-overlay"),
+    modal: root.querySelector(".modal"),
     modalTitle: root.querySelector("#modal-title"),
     modalBody: root.querySelector("#modal-body"),
     modalActions: root.querySelector("#modal-actions"),
@@ -101,6 +143,9 @@ export function createUI({ root, dispatch }) {
   let modalKind = null;
   let previousFocus = null;
   let announceTimer = null;
+  let pauseHasProgress = false;
+  let pendingAction = null;
+  let pendingOrigin = null;
 
   for (let index = 0; index < CELL_COUNT; index++) {
     const row = Math.floor(index / SIZE);
@@ -157,6 +202,65 @@ export function createUI({ root, dispatch }) {
     padButtons.push({ button, count });
   }
 
+  function resetConfirm() {
+    pendingAction = null;
+    pendingOrigin = null;
+    els.pauseConfirm.hidden = true;
+    els.pauseConfirmText.textContent = "";
+  }
+
+  function showConfirm(action, message, origin) {
+    pendingAction = action;
+    pendingOrigin = origin ?? null;
+    els.pauseConfirmText.textContent = message;
+    els.pauseConfirm.hidden = false;
+    els.confirmCancel.focus({ preventScroll: true });
+  }
+
+  function setSegmented(container, attribute, value) {
+    const buttons = container.querySelectorAll(`[data-${attribute}]`);
+    for (const button of buttons) {
+      button.setAttribute(
+        "aria-pressed",
+        button.dataset[attribute] === value ? "true" : "false"
+      );
+    }
+  }
+
+  function setDifficulty(difficulty) {
+    if (!difficulty) return;
+    setSegmented(els.difficultyPicker, "difficulty", difficulty);
+  }
+
+  function setTheme(theme) {
+    setSegmented(
+      els.themePicker,
+      "theme",
+      THEME_ORDER.includes(theme) ? theme : "auto"
+    );
+  }
+
+  function openPauseMenu({ difficulty, theme, hasProgress = false } = {}) {
+    if (difficulty) setDifficulty(difficulty);
+    if (theme) setTheme(theme);
+    pauseHasProgress = Boolean(hasProgress);
+    resetConfirm();
+    els.pauseMenu.hidden = false;
+    els.pause.setAttribute("aria-expanded", "true");
+    els.resume.focus({ preventScroll: true });
+  }
+
+  function closePauseMenu({ restoreFocus = true } = {}) {
+    if (els.pauseMenu.hidden) return;
+    els.pauseMenu.hidden = true;
+    els.pause.setAttribute("aria-expanded", "false");
+    resetConfirm();
+    if (restoreFocus) {
+      const index = Number.isInteger(lastSelected) ? lastSelected : 0;
+      focusCell(index);
+    }
+  }
+
   els.board.addEventListener("pointerdown", (event) => {
     const cell = event.target.closest(".cell");
     if (!cell || !els.board.contains(cell)) return;
@@ -186,10 +290,62 @@ export function createUI({ root, dispatch }) {
   els.redo.addEventListener("click", () => dispatch({ type: "redo" }));
   els.hint.addEventListener("click", () => dispatch({ type: "hint" }));
   els.pause.addEventListener("click", () => dispatch({ type: "pause" }));
-  els.newGame.addEventListener("click", () => dispatch({ type: "new-game" }));
-  els.themeToggle.addEventListener("click", () => dispatch({ type: "theme" }));
-  els.difficulty.addEventListener("change", () => {
-    dispatch({ type: "difficulty", difficulty: els.difficulty.value });
+  els.resume.addEventListener("click", () => dispatch({ type: "resume" }));
+  els.pauseClose.addEventListener("click", () => dispatch({ type: "resume" }));
+
+  els.pauseMenu.addEventListener("click", (event) => {
+    if (event.target === els.pauseMenu) dispatch({ type: "resume" });
+  });
+
+  els.difficultyPicker.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-difficulty]");
+    if (!button) return;
+    dispatch({ type: "difficulty", difficulty: button.dataset.difficulty });
+  });
+
+  els.themePicker.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-theme]");
+    if (!button) return;
+    dispatch({ type: "theme", theme: button.dataset.theme });
+  });
+
+  els.newGame.addEventListener("click", () => {
+    if (pauseHasProgress) {
+      showConfirm(
+        "new-game",
+        "Start a new game? Current progress will be lost.",
+        els.newGame
+      );
+      return;
+    }
+    dispatch({ type: "new-game", force: true });
+  });
+
+  els.restart.addEventListener("click", () => {
+    if (pauseHasProgress) {
+      showConfirm(
+        "restart",
+        "Restart this puzzle? Values, notes, history, mistakes, hints, and timer will reset.",
+        els.restart
+      );
+      return;
+    }
+    dispatch({ type: "restart", force: true });
+  });
+
+  els.confirmOk.addEventListener("click", () => {
+    const action = pendingAction;
+    if (!action) return;
+    resetConfirm();
+    dispatch({ type: action, force: true });
+  });
+
+  els.confirmCancel.addEventListener("click", () => {
+    const origin = pendingOrigin;
+    resetConfirm();
+    if (origin && origin.isConnected && typeof origin.focus === "function") {
+      origin.focus({ preventScroll: true });
+    }
   });
 
   els.modalOverlay.addEventListener("click", (event) => {
@@ -197,35 +353,27 @@ export function createUI({ root, dispatch }) {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (!modalKind) return;
+    const pauseOpen = !els.pauseMenu.hidden;
+    if (!pauseOpen && !modalKind) return;
+
     if (event.key === "Escape") {
+      if (pauseOpen) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        dispatch({ type: "resume" });
+        return;
+      }
       if (modalKind === "win") {
         event.preventDefault();
+        event.stopImmediatePropagation();
         closeModal();
       }
       return;
     }
-    if (event.key !== "Tab") return;
 
-    const focusable = Array.from(
-      els.modalActions.querySelectorAll("button:not(:disabled)")
-    );
-    if (focusable.length === 0) {
-      event.preventDefault();
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = document.activeElement;
-    if (event.shiftKey) {
-      if (active === first || !els.modalOverlay.contains(active)) {
-        event.preventDefault();
-        last.focus();
-      }
-    } else if (active === last || !els.modalOverlay.contains(active)) {
-      event.preventDefault();
-      first.focus();
-    }
+    if (event.key !== "Tab") return;
+    if (pauseOpen) trapFocus(event, els.pauseSheet);
+    else if (modalKind) trapFocus(event, els.modal);
   });
 
   function modalButton(text, kind, variant) {
@@ -322,13 +470,6 @@ export function createUI({ root, dispatch }) {
     cells[index].button.focus({ preventScroll: true });
   }
 
-  function setDifficulty(difficulty) {
-    if (!difficulty) return;
-    if (Array.from(els.difficulty.options).some((option) => option.value === difficulty)) {
-      els.difficulty.value = difficulty;
-    }
-  }
-
   function render(state, view = {}) {
     const selectedIndex =
       Number.isInteger(view.selectedIndex) &&
@@ -394,25 +535,25 @@ export function createUI({ root, dispatch }) {
 
     const completed = Boolean(state.completed);
     els.pause.disabled = completed;
-    els.pause.textContent = paused ? "Resume" : "Pause";
     els.pause.setAttribute("aria-pressed", paused ? "true" : "false");
-    els.pause.setAttribute(
-      "aria-label",
-      completed
-        ? "Timer stopped, puzzle complete"
-        : paused
-          ? "Resume timer"
-          : "Pause timer"
-    );
+    els.pause.setAttribute("aria-label", paused ? "Resume" : "Pause");
 
-    els.mistakes.textContent = `Mistakes: ${state.mistakes}/${MISTAKE_LIMIT}`;
-    els.hints.textContent = `Hints: ${state.hints}`;
+    const mistakesLabel = `Mistakes ${state.mistakes} of ${MISTAKE_LIMIT}`;
+    els.mistakesValue.textContent = `${state.mistakes}/${MISTAKE_LIMIT}`;
+    els.mistakes.setAttribute("aria-label", mistakesLabel);
+    els.mistakesSide.textContent = `Mistakes ${state.mistakes}/${MISTAKE_LIMIT}`;
+    els.mistakesSide.setAttribute("aria-label", mistakesLabel);
+
+    const hintsLabel = `Hints used: ${state.hints}`;
+    els.hintsValue.textContent = String(state.hints);
+    els.hints.setAttribute("aria-label", hintsLabel);
+    els.hintsSide.textContent = `Hints ${state.hints}`;
+    els.hintsSide.setAttribute("aria-label", hintsLabel);
 
     els.notes.disabled = completed;
     els.notes.setAttribute("aria-pressed", noteMode ? "true" : "false");
     els.erase.disabled = paused || completed;
-    els.undo.disabled =
-      paused || completed || state.history.index <= 0;
+    els.undo.disabled = paused || completed || state.history.index <= 0;
     els.redo.disabled =
       paused ||
       completed ||
@@ -433,12 +574,8 @@ export function createUI({ root, dispatch }) {
       button.setAttribute("aria-label", `${digit}, ${left} remaining`);
     }
 
-    const themeName = difficultyLabel(theme);
-    els.themeToggle.textContent = `Theme: ${themeName}`;
-    els.themeToggle.setAttribute(
-      "aria-label",
-      `Theme: ${theme}. Activate to switch to ${nextTheme(theme)}.`
-    );
+    setTheme(theme);
+    if (view.selectedDifficulty) setDifficulty(view.selectedDifficulty);
   }
 
   return {
@@ -448,6 +585,9 @@ export function createUI({ root, dispatch }) {
     focusCell,
     announce,
     isModalOpen: () => modalKind !== null,
+    isPauseMenuOpen: () => !els.pauseMenu.hidden,
+    openPauseMenu,
+    closePauseMenu,
     setDifficulty
   };
 }

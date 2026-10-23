@@ -417,6 +417,22 @@ export class Game {
     return this._state.running;
   }
 
+  restart() {
+    const state = this._state;
+    state.values = state.puzzle.slice();
+    state.notes = new Array(CELLS).fill(0);
+    state.mistakes = 0;
+    state.hints = 0;
+    state.elapsedMs = 0;
+    state.running = true;
+    state.completed = false;
+    state.gameOverShown = false;
+    state.history = { actions: [], index: 0 };
+    state.lastEvent = null;
+    this._lastTick = null;
+    return this;
+  }
+
   tick(nowMs = now()) {
     if (!this._state.running) {
       this._lastTick = null;

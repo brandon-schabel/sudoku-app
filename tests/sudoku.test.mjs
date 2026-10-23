@@ -266,6 +266,43 @@ test("isWon becomes true only when the whole board is correctly solved", () => {
   for (let digit = 1; digit <= 9; digit++) assert.equal(counts[digit], 0);
 });
 
+test("restart resets progress while keeping the original puzzle and solution", () => {
+  const game = Game.create("medium", { seed: 18 });
+  const original = game.toJSON();
+  const blanks = blankIndices(game);
+  const [first, second, third, fourth] = blanks;
+
+  const wrong = game.state.solution[first] === 9 ? 1 : game.state.solution[first] + 1;
+  game.enterDigit(first, wrong);
+  game.toggleNote(second, 2);
+  game.hint(third);
+  game.enterDigit(fourth, game.state.solution[fourth]);
+  game.tick(1000);
+  game.tick(2500);
+  game.pause();
+
+  assert.equal(game.state.running, false);
+  assert.ok(game.state.history.actions.length > 0);
+
+  const restarted = game.restart();
+
+  assert.equal(restarted, game);
+  assert.deepEqual(game.state.values, original.puzzle);
+  assert.deepEqual(game.state.notes, new Array(81).fill(0));
+  assert.equal(game.state.mistakes, 0);
+  assert.equal(game.state.hints, 0);
+  assert.equal(game.state.elapsedMs, 0);
+  assert.equal(game.state.running, true);
+  assert.equal(game.state.completed, false);
+  assert.equal(game.state.gameOverShown, false);
+  assert.equal(game.state.lastEvent, null);
+  assert.deepEqual(game.state.history, { actions: [], index: 0 });
+  assert.deepEqual(game.state.puzzle, original.puzzle);
+  assert.deepEqual(game.state.solution, original.solution);
+  assert.equal(game.state.difficulty, original.difficulty);
+  assert.equal(game.state.createdAt, original.createdAt);
+});
+
 test("storage degrades gracefully when localStorage is unavailable", () => {
   const hadStorage = "localStorage" in globalThis;
   const previous = globalThis.localStorage;
