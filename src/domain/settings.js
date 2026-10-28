@@ -1,5 +1,5 @@
 /** Available built-in themes. */
-export const THEMES = ['graphite', 'ocean', 'lavender', 'sand', 'rose', 'sage'];
+export const THEMES = Object.freeze(['graphite', 'ocean', 'lavender', 'sand', 'rose', 'sage']);
 /** @typedef {'easy'|'medium'|'hard'|'expert'} Difficulty */
 /** @typedef {{schema:2,theme:string,colorMode:'system'|'light'|'dark',highlightRelated:boolean,highlightSameDigit:boolean,showMistakes:boolean,cleanupNotes:boolean,showTimer:boolean,inputMode:'cell-first'|'number-first',colorblind:boolean,textSize:'default'|'large'|'xlarge',reducedMotion:'system'|'on'|'off',haptics:boolean,sounds:boolean,confirmNewGame:boolean,confirmRestart:boolean,lastDifficulty:Difficulty,onboardingDone:boolean}} Settings */
 /** Default user settings. */
