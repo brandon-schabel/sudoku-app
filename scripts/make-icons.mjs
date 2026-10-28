@@ -23,6 +23,8 @@ export const OUTPUTS = [
   { src: 'assets/icons/icon-maskable.svg', out: 'assets/icons/maskable-512.png', size: 512 },
   // inputs for @capacitor/assets
   { src: 'assets/icons/icon-full.svg', out: 'assets/icon-only.png', size: 1024 },
+  { src: 'assets/icons/icon-foreground.svg', out: 'assets/icon-foreground.png', size: 1024 },
+  { src: 'assets/icons/icon-background.svg', out: 'assets/icon-background.png', size: 1024 },
   { src: 'assets/splash/splash.svg', out: 'assets/splash/splash-2732.png', size: 2732 },
   { src: 'assets/splash/splash-dark.svg', out: 'assets/splash/splash-dark-2732.png', size: 2732 },
   { src: 'assets/splash/splash.svg', out: 'assets/splash.png', size: 2732 },

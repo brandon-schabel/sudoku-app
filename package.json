@@ -3,7 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "build:www": "node scripts/build-www.mjs",
+    "cap:sync": "node scripts/build-www.mjs && cap sync",
+    "android:debug": "node scripts/build-www.mjs && cap sync android && cd android && ./gradlew assembleDebug",
+    "android:release": "node scripts/build-www.mjs && cap sync android && cd android && ./gradlew bundleRelease assembleRelease",
+    "icons": "node scripts/make-icons.mjs && capacitor-assets generate --ios --android --iconBackgroundColor \"#2b2f36\" --splashBackgroundColor \"#f4f2ee\" --splashBackgroundColorDark \"#23262c\"",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "devDependencies": {
     "@capacitor-community/in-app-review": "^7.1.0",
