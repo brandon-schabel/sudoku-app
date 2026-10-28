@@ -49,17 +49,6 @@ function shuffle(values, rng) {
   return values;
 }
 
-function legacyRng(seed) {
-  // mulberry32: small, fast, deterministic.
-  let a = seed >>> 0;
-  return function random() {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /** Legacy-compatible board operation; inputs are not mutated. */
 export function getPeers(index) {
   if (!Number.isInteger(index) || index < 0 || index >= CELLS) return [];
@@ -227,8 +216,8 @@ export function countSolutions(board, limit = 2) {
 }
 
 /** Legacy-compatible board operation; inputs are not mutated. */
-export function generateSolvedBoard(rng = Math.random) {
-  const random = typeof rng === "function" ? rng : Math.random;
+export function generateSolvedBoard(rng) {
+  const random = rng;
   const result = search(new Array(CELLS).fill(0), 1, random);
   return result.solution;
 }
