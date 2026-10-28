@@ -1,9 +1,9 @@
-import { DEFAULT_SETTINGS, createRecord, computeScore, personalBest, emptyArchive, saveActive, resume, restoreRecovery, removeEntry, exportData, importData } from '../src/domain/index.js';
-import { dailyKey } from '../src/engine/index.js';
-import { createMenu } from '../src/ui/menu/index.js';
-import { createWinDialog } from '../src/ui/win.js';
-import { createOnboarding } from '../src/ui/onboarding.js';
-import { h } from '../src/ui/dom.js';
+import { DEFAULT_SETTINGS, createRecord, computeScore, personalBest, emptyArchive, saveActive, resume, restoreRecovery, removeEntry, exportData, importData } from '../../src/domain/index.js';
+import { dailyKey } from '../../src/engine/index.js';
+import { createMenu } from '../../src/ui/menu/index.js';
+import { createWinDialog } from '../../src/ui/win.js';
+import { createOnboarding } from '../../src/ui/onboarding.js';
+import { h } from '../../src/ui/dom.js';
 const params = new URLSearchParams(location.search);
 const now = Date.now();
 const baseAssist = { hints: 0, checks: 0, reveals: 0, errorsShown: 0, autoNotes: 0 };
@@ -44,7 +44,7 @@ const app = {
   },
 };
 const menu = createMenu({ root: document.getElementById('menu-root'), app });
-const win = createWinDialog({ root: document.getElementById('win-root'), app });
+const win = createWinDialog({ root: document.getElementById('win-root'), app, menu });
 const onboarding = createOnboarding({ root: document.getElementById('onboarding-root'), app });
 function show(view = 'menu') {
   document.querySelectorAll('dialog[open]').forEach(dialog => dialog.close());

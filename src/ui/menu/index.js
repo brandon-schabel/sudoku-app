@@ -1,7 +1,7 @@
 import { h } from '../dom.js';
 import { dailyKey } from '../../engine/index.js';
 import { modal, button } from './modal.js';
-import { pauseSummary, shiftMonth } from './models.js';
+import { createMenuMachine, pauseSummary, shiftMonth, shouldCallFacadeResume } from './models.js';
 import { settingsView } from './settings.js';
 import { homeView, newView, continueView, dailyView, statsView, howtoView, toolsView } from './views.js';
 const appMenus = new WeakMap();
@@ -14,37 +14,53 @@ const titles = { menu: 'A moment for you', new: 'New game', continue: 'Continue 
 
 /** Create the unified, accessible menu against the documented app facade. */
 export function createMenu({ root, app, onOpen, onClose }) {
-  let view = 'menu', pending = null, busy = false;
-  const today = dailyKey().split('-').map(Number);
-  const ctx = { app, year: today[0], month: today[1], filter: 'all',
-    navigate(next) { panel.announce(''); pending = null; view = Object.hasOwn(views, next) ? next : 'menu'; render(true); },
-    resume() { close(); app.actions.resume(); },
-    changeMonth(delta) { Object.assign(ctx, shiftMonth(ctx.year, ctx.month, delta)); render(); },
+  const machine = createMenuMachine();
+  const today = () => dailyKey().split('-').map(Number);
+  const monthBounds = () => {
+    const [maxYear, maxMonth] = today();
+    const installedAt = app.data()?.meta?.installedAt;
+    const date = Number.isFinite(installedAt) ? new Date(installedAt) : new Date(Date.UTC(maxYear, maxMonth - 1, 1));
+    const minYear = date.getUTCFullYear(), minMonth = date.getUTCMonth() + 1;
+    return minYear > maxYear || (minYear === maxYear && minMonth > maxMonth)
+      ? { minYear: maxYear, minMonth: maxMonth, maxYear, maxMonth }
+      : { minYear, minMonth, maxYear, maxMonth };
+  };
+  const [initialYear, initialMonth] = today();
+  const ctx = { app, year: initialYear, month: initialMonth, filter: 'all', calendarToday: `${initialYear}-${String(initialMonth).padStart(2, '0')}`,
+    syncCalendar() {
+      const bounds = monthBounds(), currentMonth = `${bounds.maxYear}-${String(bounds.maxMonth).padStart(2, '0')}`;
+      if (`${ctx.year}-${String(ctx.month).padStart(2, '0')}` === ctx.calendarToday) Object.assign(ctx, { year: bounds.maxYear, month: bounds.maxMonth });
+      else Object.assign(ctx, shiftMonth(ctx.year, ctx.month, 0, bounds));
+      ctx.calendarToday = currentMonth;
+    },
+    navigate(next) { if (machine.busy) return; panel.announce(''); machine.navigate(next, new Set(Object.keys(views))); render(true); },
+    resume() { if (machine.busy) return; const hasGame = Boolean(app.game()); close(); if (shouldCallFacadeResume(hasGame, typeof onClose === 'function')) app.actions.resume(); },
+    changeMonth(delta) { if (machine.busy) return; const bounds = monthBounds(); Object.assign(ctx, shiftMonth(ctx.year, ctx.month, delta, bounds)); render(); },
     setFilter(filter) { ctx.filter = filter; render(); },
-    confirm(title, text, action) { panel.announce(''); pending = { title, text, action }; render(true); },
+    confirm(title, text, action) { panel.announce(''); machine.confirm({ title, text, action }); render(true); },
     async run(action, message, dismiss = false) {
-      if (busy) return;
-      busy = true; panel.dialog.setAttribute('aria-busy', 'true');
+      if (!machine.begin()) return;
+      panel.dialog.setAttribute('aria-busy', 'true');
       panel.announce('Working…');
       // Disable actions immediately so repeated clicks cannot enqueue another mutation.
       for (const control of panel.body.querySelectorAll('button, input, textarea')) control.disabled = true;
       try {
         const result = await action();
-        pending = null;
+        machine.clearPending();
         if (dismiss) close();
         else render();
         panel.announce(typeof result === 'string' ? result : message);
       } catch (error) {
         render();
         panel.announce(error.name === 'AbortError' ? 'Sharing cancelled.' : `Could not complete this action. ${error.message || 'Please try again.'}`);
-      } finally { busy = false; panel.dialog.removeAttribute('aria-busy'); panel.footer.firstChild.disabled = !app.game(); }
+      } finally { machine.finish(); panel.dialog.removeAttribute('aria-busy'); panel.footer.firstChild.disabled = !app.game(); }
     },
   };
   const back = () => {
-    if (busy) return;
-    if (pending) { pending = null; render(true); }
-    else if (view !== 'menu') ctx.navigate('menu');
-    else ctx.resume();
+    const action = machine.back();
+    if (action === 'pending') render(true);
+    else if (action === 'navigate') render(true);
+    else if (action === 'resume') ctx.resume();
   };
   const panel = modal(root, { testid: 'menu', title: titles.menu, onEscape: back });
   const summary = h('p', { className: 'c2-summary' });
@@ -63,11 +79,11 @@ export function createMenu({ root, app, onOpen, onClose }) {
     const focusId = active?.id;
     const radioName = active?.getAttribute('name'), radioValue = active?.getAttribute('value');
     const scroll = panel.body.scrollTop;
-    panel.heading.textContent = pending?.title || titles[view];
+    panel.heading.textContent = machine.pending?.title || titles[machine.view];
     summary.textContent = pauseSummary(app.game());
-    backButton.hidden = view === 'menu' && !pending;
-    panel.footer.firstChild.disabled = !app.game() || busy;
-    panel.body.replaceChildren(...(pending ? [h('p', { className: 'c2-intro' }, pending.text), h('div', { className: 'c2-tool-grid' }, button('Cancel', back), button('Confirm', pending.action, { className: 'c2-button c2-primary', 'data-testid': 'menu-confirm' }))] : views[view](ctx)).flat(Infinity));
+    backButton.hidden = machine.view === 'menu' && !machine.pending;
+    panel.footer.firstChild.disabled = !app.game() || machine.busy;
+    panel.body.replaceChildren(...(machine.pending ? [h('p', { className: 'c2-intro' }, machine.pending.text), h('div', { className: 'c2-tool-grid' }, button('Cancel', back), button('Confirm', machine.pending.action, { className: 'c2-button c2-primary', 'data-testid': 'menu-confirm' }))] : views[machine.view](ctx)).flat(Infinity));
     if (moveFocus) {
       panel.body.scrollTop = 0;
       panel.heading.setAttribute('tabindex', '-1'); panel.heading.focus();
@@ -79,21 +95,21 @@ export function createMenu({ root, app, onOpen, onClose }) {
   }
   function close() {
     if (!panel.dialog.open) return;
-    panel.hide(); pending = null; onClose?.();
+    panel.hide(); machine.navigate('menu', new Set(Object.keys(views))); onClose?.();
   }
-  app.on('change', () => { if (panel.dialog.open && !busy) render(); });
+  app.on('change', () => { if (panel.dialog.open && !machine.busy) render(); });
   const controller = {
     open(next = 'menu') {
-      if (busy) return;
+      if (machine.busy) return;
       const wasOpen = panel.dialog.open;
       if (!wasOpen) onOpen?.();
-      view = Object.hasOwn(views, next) ? next : 'menu'; pending = null;
+      machine.navigate(next, new Set(Object.keys(views)));
       panel.announce(''); render(); panel.show();
       panel.body.scrollTop = 0;
     },
     close,
     isOpen() { return panel.dialog.open; },
-    refresh() { if (panel.dialog.open && !busy) render(); },
+    refresh() { if (panel.dialog.open && !machine.busy) render(); },
   };
   appMenus.set(app, controller);
   return controller;
