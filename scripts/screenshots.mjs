@@ -109,6 +109,9 @@ async function main() {
         for (const [k, v] of new URLSearchParams(scene.query + '&test=1')) u.searchParams.set(k, v);
         await page.goto(u.href, { waitUntil: 'networkidle' });
         await page.waitForTimeout(400);
+        // First-run onboarding would cover every store screenshot; skip it like a returning user.
+        const skip = page.getByRole('button', { name: /skip introduction/i });
+        if (await skip.isVisible().catch(() => false)) { await skip.click(); await page.waitForTimeout(300); }
         if (scene.action) await scene.action(page);
         await page.waitForTimeout(300);
         const dir = join(outRoot, d.platform, d.id);
