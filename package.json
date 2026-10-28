@@ -2,5 +2,13 @@
   "name": "sudoku-app",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test" }
+  "scripts": {
+    "test": "node --test",
+    "test:e2e": "playwright test",
+    "screenshots:e2e": "playwright test --update-snapshots"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.1",
+    "@axe-core/playwright": "^4.10.2"
+  }
 }
