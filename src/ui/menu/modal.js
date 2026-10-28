@@ -6,7 +6,7 @@ export function modal(root, { testid, title, onEscape }) {
   const id = `c2-dialog-${++nextId}`;
   const heading = h('h2', { id: `${id}-title`, tabindex: '-1', autofocus: true }, title);
   const dialog = h('dialog', { className: 'c2-dialog', 'data-testid': testid, 'aria-modal': 'true', 'aria-labelledby': heading.id });
-  const body = h('div', { className: 'c2-body', tabindex: '0', role: 'region', 'aria-labelledby': heading.id });
+  const body = h('div', { className: 'c2-body', tabindex: '0', 'aria-labelledby': heading.id });
   const live = h('p', { className: 'c2-live', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   const footer = h('footer', { className: 'c2-footer' });
   const header = h('header', { className: 'c2-header' }, heading);
@@ -17,7 +17,7 @@ export function modal(root, { testid, title, onEscape }) {
   dialog.addEventListener('cancel', event => { event.preventDefault(); onEscape(); });
   dialog.addEventListener('keydown', event => {
     if (event.key !== 'Tab') return;
-    const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea, select, a[href], [tabindex="0"]')].filter(node => node.getClientRects().length);
+    const focusable = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, a[href], [tabindex="0"]')].filter(node => node.getClientRects().length);
     const first = focusable[0], last = focusable.at(-1);
     if (!first) { event.preventDefault(); dialog.focus(); }
     else if (event.shiftKey && (document.activeElement === first || !focusable.includes(document.activeElement))) { event.preventDefault(); last.focus(); }

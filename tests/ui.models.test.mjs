@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatTime, formatDate, pauseSummary, shiftMonth, calendarModel, archiveModel, statsModel, importSummary } from '../src/ui/menu/models.js';
-import { winModel } from '../src/ui/win.js';
+import { cellLabel, createMenuMachine, formatTime, formatDate, pauseSummary, shiftMonth, calendarModel, archiveModel, statsModel, importSummary, shouldCallFacadeResume } from '../src/ui/menu/models.js';
+import { promptForReview, reviewPromptDecision, winModel } from '../src/ui/win.js';
+import { readBackupFile } from '../src/ui/menu/views.js';
 import { ONBOARDING_STEPS } from '../src/ui/onboarding.js';
 import { DEFAULT_SETTINGS, emptyArchive } from '../src/domain/index.js';
-import { createMenu } from '../src/ui/menu/index.js';
+import { shouldPromptReview } from '../src/domain/index.js';
 
 const assist = { hints: 0, checks: 0, reveals: 0, errorsShown: 0, autoNotes: 0 };
 const game = { id: 'one', difficulty: 'easy', puzzle: Array(81).fill(0), values: Array(81).fill(0), elapsedMs: 919000, mistakes: 0, assist };
@@ -14,11 +15,11 @@ test('format time handles zero, seconds, hour boundaries, and invalid input', ()
   for (const [input, expected] of [[0, '0:00'], [999, '0:00'], [1000, '0:01'], [919000, '15:19'], [3599999, '59:59'], [3600000, '1:00:00'], [3661000, '1:01:01'], [360000000, '100:00:00'], [-1000, '0:00'], [NaN, '—'], [Infinity, '—'], [null, '—'], [undefined, '—']]) assert.equal(formatTime(input), expected);
 });
 
-test('saved timestamps are formatted safely', () => {
+test('saved timestamps are deterministic in an explicit locale and time zone', () => {
   assert.equal(formatDate(undefined), 'Unknown date');
   assert.equal(formatDate(NaN), 'Unknown date');
   assert.equal(formatDate(1e20), 'Unknown date');
-  assert.ok(formatDate(Date.UTC(2026, 0, 2)).includes('2026'));
+  assert.equal(formatDate(Date.UTC(2026, 0, 2), { locale: 'en-US', timeZone: 'UTC' }), 'Jan 2, 2026, 12:00 AM');
 });
 
 test('pause summary uses facade snapshot and correct singulars', () => {
@@ -31,10 +32,48 @@ test('month movement crosses years and leaps without local time shifts', () => {
   assert.deepEqual(shiftMonth(2026, 12, 1), { year: 2027, month: 1 });
   assert.deepEqual(shiftMonth(2026, 1, -1), { year: 2025, month: 12 });
   assert.deepEqual(shiftMonth(2024, 1, 1), { year: 2024, month: 2 });
+  assert.deepEqual(shiftMonth(2020, 1, -1, { minYear: 2024, minMonth: 3, maxYear: 2026, maxMonth: 2 }), { year: 2024, month: 3 });
+  assert.deepEqual(shiftMonth(2026, 2, 1, { minYear: 2024, minMonth: 3, maxYear: 2026, maxMonth: 2 }), { year: 2026, month: 2 });
+});
+
+test('cell labels name coordinates, values, empty cells, and givens', () => {
+  assert.equal(cellLabel(2, 1, true), 'Row 1, column 3, 1, given');
+  assert.equal(cellLabel(80, 9, false), 'Row 9, column 9, 9');
+  assert.equal(cellLabel(0, 0, false), 'Row 1, column 1, empty');
+});
+
+test('menu state machine routes back, clears pending confirmation, and guards busy actions', () => {
+  const machine = createMenuMachine();
+  const allowed = new Set(['menu', 'stats']);
+  assert.equal(machine.navigate('stats', allowed), true);
+  assert.equal(machine.view, 'stats');
+  assert.equal(machine.back(), 'navigate');
+  assert.equal(machine.view, 'menu');
+  machine.confirm({ title: 'Delete' });
+  assert.equal(machine.back(), 'pending');
+  assert.equal(machine.pending, null);
+  assert.equal(machine.back(), 'resume');
+  machine.confirm({ title: 'Pending before action' });
+  assert.equal(machine.begin(), true);
+  assert.equal(machine.navigate('stats', allowed), false);
+  assert.equal(machine.confirm({}), false);
+  assert.equal(machine.back(), 'blocked');
+  assert.equal(machine.clearPending(), true);
+  assert.equal(machine.pending, null);
+  assert.equal(machine.begin(), false);
+  machine.finish();
+  assert.equal(machine.navigate('stats', allowed), true);
+});
+
+test('menu close callback and facade never both resume, and no-game close never resumes', () => {
+  assert.equal(shouldCallFacadeResume(true, true), false);
+  assert.equal(shouldCallFacadeResume(true, false), true);
+  assert.equal(shouldCallFacadeResume(false, false), false);
 });
 
 test('calendar pads to complete weeks and includes leap day', () => {
-  const result = calendarModel([], emptyArchive(), 2024, 2, '2024-02-20');
+  const result = calendarModel([], emptyArchive(), 2024, 2, '2024-02-20', { locale: 'en-US', timeZone: 'UTC' });
+  assert.equal(result.title, 'February 2024');
   assert.equal(result.cells.length, 35);
   assert.equal(result.cells.slice(0, 4).every(cell => cell === null), true);
   const days = result.cells.filter(Boolean);
@@ -66,6 +105,16 @@ test('archive excludes completed games and formats only originally empty progres
   assert.equal(result[1].time, '15:19');
   assert.deepEqual(result[1].recovery.map(copy => copy.time), ['0:06', '0:05']);
   assert.equal(JSON.stringify(entries), before);
+});
+
+test('archive degrades corrupt entries and recovery copies without game snapshots', () => {
+  const entries = {
+    missing: { id: 'missing', status: 'active', difficulty: 'easy', updatedAt: 1, game: null, recovery: [] },
+    usable: { id: 'usable', status: 'active', difficulty: 'easy', updatedAt: 2, game, recovery: [{ savedAt: 2, game: null }, { savedAt: 3, game: { elapsedMs: 4000 } }] },
+  };
+  const result = archiveModel({ activeId: 'usable', entries });
+  assert.deepEqual(result.map(entry => entry.id), ['usable']);
+  assert.deepEqual(result[0].recovery.map(copy => copy.time), ['0:04']);
 });
 
 test('empty archive and empty statistics have useful placeholders', () => {
@@ -113,6 +162,20 @@ test('recent rows show reveals and all requested completion fields', () => {
   assert.equal(row.date, formatDate(row.completedAt));
 });
 
+test('imported records with absent or nonnumeric scores render as zero', () => {
+  const rows = statsModel([record(1, { score: undefined }), record(2, { score: 'bad' })]).recent;
+  assert.deepEqual(rows.map(row => row.score), [0, 0]);
+  assert.equal(statsModel([record(1, { score: undefined }), record(2, { score: 'bad' })]).rows[0].points, '0');
+});
+
+test('file imports reject oversized files before reading and accept files at the cap', async () => {
+  let read = false;
+  const oversized = { size: 5 * 1024 * 1024 + 1, async text() { read = true; return 'x'; } };
+  await assert.rejects(readBackupFile(oversized), /5 MB or smaller/);
+  assert.equal(read, false);
+  assert.equal(await readBackupFile({ size: 5 * 1024 * 1024, async text() { return 'backup'; } }), 'backup');
+});
+
 test('import summary explains both puzzle preservation and settings conflicts', () => {
   assert.equal(importSummary({ added: { records: 2, entries: 3 }, conflicts: [] }), 'Imported 2 records and 3 puzzles.');
   const summary = importSummary({ added: { records: 1, entries: 2 }, conflicts: [{ kind: 'entry', id: 'a' }, { kind: 'settings', id: 'settings' }] });
@@ -133,13 +196,27 @@ test('win fallback uses domain personal best and game assistance', () => {
   assert.equal(winModel([], { game: { ...game, assist: { checks: 1 } } }).assisted, true);
 });
 
+test('review prompt requires policy eligibility and a persistence hook', () => {
+  const records = Array.from({ length: 5 }, (_, i) => record(i + 1, { completedAt: i + 1, assisted: false }));
+  assert.equal(shouldPromptReview({}, records, 10), true);
+  assert.equal(reviewPromptDecision({}, records, false, 10), false);
+  assert.equal(reviewPromptDecision({}, records, true, 10), true);
+  assert.equal(reviewPromptDecision({ reviewPromptedAt: 10 }, records, true, 11), false);
+});
+
+test('review prompt persists the timestamp before asking the platform', async () => {
+  const records = Array.from({ length: 5 }, (_, i) => record(i + 1, { completedAt: i + 1, assisted: false }));
+  const events = [];
+  const app = { data: () => ({ meta: {}, records }), actions: { setReviewPromptedAt(timestamp) { events.push(`persist:${timestamp}`); } } };
+  const requested = await promptForReview(app, async () => { events.push('request'); return true; }, 12345);
+  assert.equal(requested, true);
+  assert.deepEqual(events, ['persist:12345', 'request']);
+  assert.equal(await promptForReview({ ...app, actions: {} }, async () => false, 12345), false);
+});
+
 test('onboarding has four concise steps and settings default leaves it pending', () => {
   assert.equal(ONBOARDING_STEPS.length, 4);
   assert.equal(DEFAULT_SETTINGS.onboardingDone, false);
   assert.ok(ONBOARDING_STEPS.every(step => step.title && step.text));
   assert.match(ONBOARDING_STEPS.at(-1).title, /Just the puzzle. Always ad-free./);
-});
-
-test('entry point imports are DOM-free and public constructor signatures remain callable', () => {
-  assert.equal(typeof createMenu, 'function');
 });

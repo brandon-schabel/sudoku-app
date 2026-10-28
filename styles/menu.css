@@ -29,6 +29,7 @@
 }
 .c2-dialog button:hover:enabled { background: var(--surface-2); }
 .c2-dialog :is(button, a, input, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.c2-error { text-decoration: underline wavy; text-decoration-thickness: .12em; }
 .c2-dialog button:disabled { opacity: .5; cursor: default; }
 .c2-dialog .c2-primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); font-weight: 650; }
 .c2-dialog .c2-primary:hover:enabled { background: var(--accent); filter: brightness(.94); }

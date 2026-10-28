@@ -2,6 +2,7 @@ import { DIFFICULTIES, DIFFICULTY_META, dailyKey } from '../../engine/index.js';
 import { h } from '../dom.js';
 import { button } from './modal.js';
 import { archiveModel, calendarModel, statsModel, formatTime, importSummary } from './models.js';
+import { share as platformShare } from '../../platform/index.js';
 /** Persistence reassurance shared by the archive and new-game chooser. */
 export const keptNote = 'Your current puzzle is kept in Continue when you start another.';
 const descriptions = { easy: 'Naked singles and full houses. A gentle place to begin.', medium: 'Hidden singles. Look for the only place a digit can go.', hard: 'Pairs, triples, and locked candidates. Find the connections.', expert: 'X-wing, Swordfish, and advanced wing patterns. Take your time.' };
@@ -29,6 +30,7 @@ export function continueView(ctx) {
 
 /** UTC daily month calendar with visible and spoken status marks. */
 export function dailyView(ctx) {
+  ctx.syncCalendar();
   const today = dailyKey();
   const model = calendarModel(ctx.app.data().records, ctx.app.data().archive, ctx.year, ctx.month, today);
   const labels = { completed: 'Completed', 'in-progress': 'In progress', none: 'Available', future: 'Not available yet' };
@@ -47,8 +49,8 @@ export function statsView(ctx) {
   return [tabs, h('p', { className: 'c2-note' }, 'Unassisted means no hints, reveals, checks, shown errors, or auto-filled notes.'), h('section', { role: 'tabpanel', id: 'c2-stats-panel', 'aria-labelledby': `c2-stats-${ctx.filter}`, tabindex: '0' }, !model.total ? h('p', { className: 'c2-empty' }, 'No completed puzzles in this view yet. Your first finish is a fresh beginning.') : null,
     h('div', { className: 'c2-table-wrap', tabindex: '0', role: 'region', 'aria-label': 'Statistics by difficulty, scroll to see all columns' }, h('table', {}, h('caption', {}, `${model.total} puzzles solved`), h('thead', {}, h('tr', {}, ['Difficulty', 'Solved', 'Average', 'Best time', 'Best score'].map(label => h('th', { scope: 'col' }, label)))), h('tbody', {}, model.rows.map(row => h('tr', {}, h('th', { scope: 'row' }, row.label), [row.solved, row.average, row.best, row.points].map(value => h('td', {}, value))))))),
     h('h3', {}, 'Your pace over time'), h('p', { className: 'c2-note' }, 'Latest 5 vs previous 5, compared within the same difficulty and assistance category.'),
-    h('div', { className: 'c2-stack' }, model.trends.filter(row => row.comparison?.previous.n > 0).map(row => { const t = row.comparison; return h('div', { className: 'c2-card' }, h('strong', {}, `${row.label} · ${row.assisted ? 'Assisted' : 'Unassisted'}`), h('p', {}, `Latest ${t.latest.n}: ${formatTime(t.latest.avgMs)} · ${Math.round(t.latest.avgScore)} points`), h('p', {}, `Previous ${t.previous.n}: ${formatTime(t.previous.avgMs)} · ${Math.round(t.previous.avgScore)} points`), h('small', {}, `${formatTime(Math.abs(t.deltaMs))} ${t.deltaMs < 0 ? 'faster' : t.deltaMs > 0 ? 'slower' : 'change'} · ${t.deltaScore >= 0 ? '+' : ''}${t.deltaScore} points`)); })),
-    !model.trends.some(row => row.comparison?.previous.n > 0) ? h('p', { className: 'c2-note' }, 'Finish at least 6 puzzles in one category to compare groups. Each group uses up to 5 games.') : null,
+    h('div', { className: 'c2-stack' }, model.trends.filter(row => (row.comparison?.previous?.n ?? 0) > 0).map(row => { const t = row.comparison; return h('div', { className: 'c2-card' }, h('strong', {}, `${row.label} · ${row.assisted ? 'Assisted' : 'Unassisted'}`), h('p', {}, `Latest ${t.latest.n}: ${formatTime(t.latest.avgMs)} · ${Math.round(t.latest.avgScore)} points`), h('p', {}, `Previous ${t.previous.n}: ${formatTime(t.previous.avgMs)} · ${Math.round(t.previous.avgScore)} points`), h('small', {}, `${formatTime(Math.abs(t.deltaMs))} ${t.deltaMs < 0 ? 'faster' : t.deltaMs > 0 ? 'slower' : 'change'} · ${t.deltaScore >= 0 ? '+' : ''}${t.deltaScore} points`)); })),
+    !model.trends.some(row => (row.comparison?.previous?.n ?? 0) > 0) ? h('p', { className: 'c2-note' }, 'Finish at least 2 puzzles in one category to compare groups. Each group uses up to 5 games.') : null,
     h('h3', {}, 'Recent games'), model.recent.length ? h('ol', { className: 'c2-recent' }, model.recent.map(record => h('li', { className: 'c2-card' }, h('strong', {}, `${record.label} · ${record.time} · ${record.score.toLocaleString()} points`), h('p', {}, record.date), h('small', {}, `${record.assisted ? 'Assisted' : 'Unassisted'} · ${record.mistakes} mistakes · ${record.reveals} reveals`)))) : h('p', { className: 'c2-note' }, 'Your latest 20 completed puzzles will appear here.'))];
 }
 
@@ -59,15 +61,21 @@ export function howtoView() {
   return [...sections.map(([title, text]) => h('section', { className: 'c2-prose' }, h('h3', {}, title), h('p', {}, text))), h('h3', {}, 'Keyboard shortcuts'), h('table', { className: 'c2-shortcuts' }, h('tbody', {}, shortcuts.map(([key, meaning]) => h('tr', {}, h('th', { scope: 'row' }, h('kbd', {}, key)), h('td', {}, meaning))))), h('p', { className: 'c2-tagline' }, 'Just the puzzle. Always ad-free.')];
 }
 
-/** Safe backup download and optional system share of the same JSON file. */
+/** Safe backup download and optional platform share of the same JSON text. */
 export async function exportBackup(app, share = false) {
   const text = app.actions.exportData();
+  if (share && await platformShare({ title: 'Sudoku backup', text })) return;
   const file = new File([text], 'sudoku-backup.json', { type: 'application/json' });
-  if (share && navigator.canShare?.({ files: [file] })) { await navigator.share({ title: 'Sudoku backup', files: [file] }); return; }
   const url = URL.createObjectURL(file);
   const link = h('a', { href: url, download: file.name });
   document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Read an import backup only when it is within the supported 5 MB limit. */
+export async function readBackupFile(file) {
+  if (file.size > 5 * 1024 * 1024) throw new RangeError('Backup files must be 5 MB or smaller.');
+  return file.text();
 }
 
 /** Puzzle tools and conflict-preserving import/export controls. */
@@ -83,7 +91,7 @@ export function toolsView(ctx) {
     button('Restart puzzle', () => { const restart = () => ctx.run(() => ctx.app.actions.restart(), 'Puzzle restarted.', true); if (ctx.app.settings().confirmRestart) ctx.confirm('Restart this puzzle?', 'All entries, notes, mistakes, and time will reset. Assistance history is kept.', restart); else restart(); }, { disabled: !hasGame })),
     h('h3', {}, 'Keep a backup'), h('p', {}, 'Export your puzzles, settings, and statistics as JSON. Your data stays on this device unless you choose to share it.'), h('div', { className: 'c2-tool-grid' }, button('Download backup', () => ctx.run(() => exportBackup(ctx.app), 'Backup downloaded.')), button('Share backup', () => ctx.run(() => exportBackup(ctx.app, true), 'Backup shared or downloaded.'))),
     h('h3', {}, 'Import data'), h('p', { className: 'c2-note' }, 'Records are combined. Conflicting puzzles keep both copies. Your current settings are kept if settings differ.'),
-    h('label', { className: 'c2-file-label', for: 'c2-import-file' }, 'Choose a JSON backup'), h('input', { id: 'c2-import-file', type: 'file', accept: '.json,application/json', onchange: event => { const file = event.target.files[0]; if (file) ctx.run(async () => importSummary(ctx.app.actions.importData(await file.text())), 'Data imported.'); } }),
+    h('label', { className: 'c2-file-label', for: 'c2-import-file' }, 'Choose a JSON backup'), h('input', { id: 'c2-import-file', type: 'file', accept: '.json,application/json', onchange: event => { const file = event.target.files[0]; if (file) ctx.run(async () => importSummary(ctx.app.actions.importData(await readBackupFile(file))), 'Data imported.'); } }),
     h('label', { className: 'c2-file-label', for: 'c2-import-text' }, 'Or paste backup JSON'), paste, button('Import pasted data', () => importText(paste.value)),
   ];
 }
