@@ -1,4 +1,5 @@
 /** Offline bank; regenerate with tools/build-bank.mjs. Each source has one solution and its stated tier. */
+// prettier-ignore
 export const PUZZLE_BANK = {
   "easy": [
     {
