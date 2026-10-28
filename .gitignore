@@ -4,6 +4,8 @@ node_modules/
 opencode.json
 www/
 store/screenshots/
+test-results/
+playwright-report/
 *.keystore
 *.jks
 keystore.properties
