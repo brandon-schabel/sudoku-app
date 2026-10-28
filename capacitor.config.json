@@ -1,0 +1,8 @@
+{
+  "appId": "com.brandonschabel.stillsudoku",
+  "appName": "Still Sudoku",
+  "webDir": "www",
+  "backgroundColor": "#23262c",
+  "ios": { "contentInset": "never" },
+  "android": { "allowMixedContent": false }
+}
