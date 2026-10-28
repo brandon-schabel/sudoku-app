@@ -4,6 +4,11 @@ import { modal, button } from './modal.js';
 import { pauseSummary, shiftMonth } from './models.js';
 import { settingsView } from './settings.js';
 import { homeView, newView, continueView, dailyView, statsView, howtoView, toolsView } from './views.js';
+const appMenus = new WeakMap();
+
+/** Find an existing app menu so completion buttons reuse the unified panel. */
+export function menuForApp(app) { return appMenus.get(app); }
+
 const views = { menu: homeView, new: newView, continue: continueView, daily: dailyView, stats: statsView, settings: settingsView, howto: howtoView, tools: toolsView };
 const titles = { menu: 'A moment for you', new: 'New game', continue: 'Continue a puzzle', daily: 'Daily puzzle', stats: 'Statistics', settings: 'Themes & settings', howto: 'How to play', tools: 'Puzzle tools' };
 
@@ -12,11 +17,11 @@ export function createMenu({ root, app, onOpen, onClose }) {
   let view = 'menu', pending = null, busy = false;
   const today = dailyKey().split('-').map(Number);
   const ctx = { app, year: today[0], month: today[1], filter: 'all',
-    navigate(next) { pending = null; view = Object.hasOwn(views, next) ? next : 'menu'; render(true); },
+    navigate(next) { panel.announce(''); pending = null; view = Object.hasOwn(views, next) ? next : 'menu'; render(true); },
     resume() { close(); app.actions.resume(); },
     changeMonth(delta) { Object.assign(ctx, shiftMonth(ctx.year, ctx.month, delta)); render(); },
     setFilter(filter) { ctx.filter = filter; render(); },
-    confirm(title, text, action) { pending = { title, text, action }; render(true); },
+    confirm(title, text, action) { panel.announce(''); pending = { title, text, action }; render(true); },
     async run(action, message, dismiss = false) {
       if (busy) return;
       busy = true; panel.dialog.setAttribute('aria-busy', 'true');
@@ -62,7 +67,7 @@ export function createMenu({ root, app, onOpen, onClose }) {
     summary.textContent = pauseSummary(app.game());
     backButton.hidden = view === 'menu' && !pending;
     panel.footer.firstChild.disabled = !app.game() || busy;
-    panel.body.replaceChildren(...(pending ? [h('p', { className: 'c2-intro' }, pending.text), h('div', { className: 'c2-tool-grid' }, button('Cancel', back), button('Confirm', pending.action, { className: 'c2-button c2-primary', 'data-testid': 'menu-confirm' }))] : views[view](ctx)));
+    panel.body.replaceChildren(...(pending ? [h('p', { className: 'c2-intro' }, pending.text), h('div', { className: 'c2-tool-grid' }, button('Cancel', back), button('Confirm', pending.action, { className: 'c2-button c2-primary', 'data-testid': 'menu-confirm' }))] : views[view](ctx)).flat(Infinity));
     if (moveFocus) {
       panel.body.scrollTop = 0;
       panel.heading.setAttribute('tabindex', '-1'); panel.heading.focus();
@@ -77,17 +82,19 @@ export function createMenu({ root, app, onOpen, onClose }) {
     panel.hide(); pending = null; onClose?.();
   }
   app.on('change', () => { if (panel.dialog.open && !busy) render(); });
-  return {
+  const controller = {
     open(next = 'menu') {
       if (busy) return;
       const wasOpen = panel.dialog.open;
       if (!wasOpen) onOpen?.();
       view = Object.hasOwn(views, next) ? next : 'menu'; pending = null;
-      render(); panel.show();
+      panel.announce(''); render(); panel.show();
       panel.body.scrollTop = 0;
     },
     close,
     isOpen() { return panel.dialog.open; },
     refresh() { if (panel.dialog.open && !busy) render(); },
   };
+  appMenus.set(app, controller);
+  return controller;
 }

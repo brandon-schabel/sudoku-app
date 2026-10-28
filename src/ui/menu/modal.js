@@ -4,14 +4,15 @@ let nextId = 0;
 /** Create a native modal with focus containment, Escape routing, and focus return. */
 export function modal(root, { testid, title, onEscape }) {
   const id = `c2-dialog-${++nextId}`;
-  const heading = h('h2', { id: `${id}-title` }, title);
+  const heading = h('h2', { id: `${id}-title`, tabindex: '-1', autofocus: true }, title);
   const dialog = h('dialog', { className: 'c2-dialog', 'data-testid': testid, 'aria-modal': 'true', 'aria-labelledby': heading.id });
-  const body = h('div', { className: 'c2-body' });
+  const body = h('div', { className: 'c2-body', tabindex: '0', role: 'region', 'aria-labelledby': heading.id });
   const live = h('p', { className: 'c2-live', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
   const footer = h('footer', { className: 'c2-footer' });
   const header = h('header', { className: 'c2-header' }, heading);
   dialog.append(header, body, live, footer);
-  root.append(dialog);
+  const announcer = h('p', { className: 'c2-announcer', role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+  root.append(dialog, announcer);
   let previous;
   dialog.addEventListener('cancel', event => { event.preventDefault(); onEscape(); });
   dialog.addEventListener('keydown', event => {
@@ -25,7 +26,10 @@ export function modal(root, { testid, title, onEscape }) {
   return { dialog, heading, header, body, live, footer,
     show() { if (!dialog.open) { previous = document.activeElement; dialog.showModal(); } },
     hide() { if (dialog.open) { dialog.close(); if (previous?.isConnected) previous.focus(); } },
-    announce(message) { live.textContent = message; },
+    announce(message) {
+      live.textContent = dialog.open ? message : '';
+      announcer.textContent = dialog.open ? '' : message;
+    },
   };
 }
 

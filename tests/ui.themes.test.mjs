@@ -18,6 +18,7 @@ for (const theme of THEMES) for (const mode of ['light', 'dark']) {
     assert.ok(block, 'theme selector exists');
     const palette = tokens(block);
     assert.deepEqual(Object.keys(palette).sort(), variables);
+    if (theme === 'graphite') for (const value of Object.values(palette).filter(value => /^#[0-9a-f]{6}$/.test(value))) assert.ok(value.slice(1, 3) === value.slice(3, 5) && value.slice(3, 5) === value.slice(5, 7), 'Graphite stays grayscale');
     for (const [foreground, background] of pairs) assert.ok(contrast(palette[foreground], palette[background]) >= 4.5, `${foreground}/${background}: ${contrast(palette[foreground], palette[background]).toFixed(2)}`);
     const cb = tokens(css.match(new RegExp(`html\\[data-cb="1"\\]\\[data-mode="${mode}"\\]\\s*\\{([^}]+)\\}`))[1]);
     assert.ok(contrast(cb.error, palette['cell-bg']) >= 4.5, 'colorblind error contrast');

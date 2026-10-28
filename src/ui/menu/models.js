@@ -12,7 +12,7 @@ export function formatTime(milliseconds) {
 
 /** Format a saved timestamp in the device locale. */
 export function formatDate(timestamp) {
-  return Number.isFinite(timestamp) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp) : 'Unknown date';
+  return Number.isFinite(timestamp) && Number.isFinite(new Date(timestamp).getTime()) ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(timestamp) : 'Unknown date';
 }
 
 /** Pause summary, including assistance independently of mistakes. */

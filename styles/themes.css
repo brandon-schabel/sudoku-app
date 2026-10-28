@@ -1,50 +1,50 @@
 /* Shared shell palette. Every theme includes complete light and dark tokens. */
 html[data-theme="graphite"][data-mode="light"],
 .c2-preview[data-theme="graphite"] .c2-mini[data-mode="light"] {
-  --bg: #f5f5f3;
+  --bg: #f5f5f5;
   --surface: #ffffff;
-  --surface-2: #eeefec;
-  --text: #222422;
-  --text-muted: #5b5e59;
-  --border: #c7cbc4;
-  --accent: #363b35;
+  --surface-2: #efefef;
+  --text: #232323;
+  --text-muted: #5d5d5d;
+  --border: #cacaca;
+  --accent: #3a3a3a;
   --accent-contrast: #ffffff;
   --cell-bg: #ffffff;
-  --cell-given: #242823;
-  --cell-user: #414a40;
-  --cell-selected: #e0e4dc;
-  --cell-related: #f0f2ec;
-  --cell-same: #e6eae1;
-  --note: #565e51;
-  --error: #56514c;
-  --error-bg: #f2e9df;
-  --success: #364c3d;
-  --focus: #40483b;
+  --cell-given: #272727;
+  --cell-user: #474747;
+  --cell-selected: #e3e3e3;
+  --cell-related: #f1f1f1;
+  --cell-same: #e8e8e8;
+  --note: #5b5b5b;
+  --error: #525252;
+  --error-bg: #eaeaea;
+  --success: #464646;
+  --focus: #454545;
   --shadow: 0 20px 80px #00000026;
   color-scheme: light;
 }
 
 html[data-theme="graphite"][data-mode="dark"],
 .c2-preview[data-theme="graphite"] .c2-mini[data-mode="dark"] {
-  --bg: #171a17;
-  --surface: #212520;
-  --surface-2: #2b302a;
-  --text: #f1f3ed;
-  --text-muted: #b6beb0;
-  --border: #525a4e;
-  --accent: #d0d9c8;
-  --accent-contrast: #1d2519;
-  --cell-bg: #252a23;
-  --cell-given: #f1f3ed;
-  --cell-user: #d0d9c8;
-  --cell-selected: #434e3b;
-  --cell-related: #30382b;
-  --cell-same: #3a4433;
-  --note: #b9c5af;
-  --error: #e3bf97;
-  --error-bg: #40372b;
-  --success: #bbd2b8;
-  --focus: #dfebd3;
+  --bg: #191919;
+  --surface: #242424;
+  --surface-2: #2f2f2f;
+  --text: #f2f2f2;
+  --text-muted: #bbbbbb;
+  --border: #575757;
+  --accent: #d6d6d6;
+  --accent-contrast: #222222;
+  --cell-bg: #282828;
+  --cell-given: #f2f2f2;
+  --cell-user: #d6d6d6;
+  --cell-selected: #4a4a4a;
+  --cell-related: #353535;
+  --cell-same: #414141;
+  --note: #c1c1c1;
+  --error: #c4c4c4;
+  --error-bg: #383838;
+  --success: #cbcbcb;
+  --focus: #e7e7e7;
   --shadow: 0 20px 80px #00000066;
   color-scheme: dark;
 }

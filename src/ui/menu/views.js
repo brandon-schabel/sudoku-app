@@ -2,6 +2,7 @@ import { DIFFICULTIES, DIFFICULTY_META, dailyKey } from '../../engine/index.js';
 import { h } from '../dom.js';
 import { button } from './modal.js';
 import { archiveModel, calendarModel, statsModel, formatTime, importSummary } from './models.js';
+/** Persistence reassurance shared by the archive and new-game chooser. */
 export const keptNote = 'Your current puzzle is kept in Continue when you start another.';
 const descriptions = { easy: 'Naked singles and full houses. A gentle place to begin.', medium: 'Hidden singles. Look for the only place a digit can go.', hard: 'Pairs, triples, and locked candidates. Find the connections.', expert: 'X-wing, Swordfish, and advanced wing patterns. Take your time.' };
 
@@ -15,7 +16,7 @@ export function homeView(ctx) {
 export function newView(ctx) {
   return [h('p', { className: 'c2-intro' }, 'A fresh grid. A little room to think.'), h('p', { className: 'c2-note' }, keptNote), h('div', { className: 'c2-stack' }, DIFFICULTIES.map(difficulty => button([h('span', { className: 'c2-difficulty-title' }, DIFFICULTY_META[difficulty].label, h('span', { className: 'c2-dots', 'aria-label': `${DIFFICULTY_META[difficulty].dots} of 4 difficulty` }, '●'.repeat(DIFFICULTY_META[difficulty].dots) + '○'.repeat(4 - DIFFICULTY_META[difficulty].dots))), h('small', {}, descriptions[difficulty])], () => {
     const start = () => ctx.run(() => ctx.app.actions.newGame(difficulty), 'New puzzle ready.', true);
-    if (ctx.app.settings().confirmNewGame && ctx.app.game()) ctx.confirm(`Start an ${DIFFICULTY_META[difficulty].label.toLowerCase()} puzzle?`, keptNote, start);
+    if (ctx.app.settings().confirmNewGame && ctx.app.game()) ctx.confirm(`Start ${['easy', 'expert'].includes(difficulty) ? 'an' : 'a'} ${DIFFICULTY_META[difficulty].label.toLowerCase()} puzzle?`, keptNote, start);
     else start();
   }, { className: 'c2-choice', 'data-testid': `new-${difficulty}` })))];
 }

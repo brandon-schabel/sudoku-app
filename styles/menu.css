@@ -143,3 +143,12 @@
 }
 @media (prefers-reduced-motion: reduce) { .c2-dialog[open] { animation: none; } }
 html[data-motion="reduce"] .c2-dialog[open] { animation: none; }
+
+/* Keep back navigation compact so short landscape screens retain reading space. */
+.c2-header { display: grid; grid-template-columns: auto 1fr; column-gap: 12px; }
+.c2-header h2 { grid-column: 1 / -1; }
+.c2-header > .c2-text-button { margin: 0; grid-column: 1; grid-row: 1; }
+.c2-header > .c2-text-button:not([hidden]) + h2 { grid-column: 2; align-self: center; }
+.c2-summary { grid-column: 1 / -1; }
+.c2-dialog .c2-header h2:focus-visible { outline: none; }
+.c2-announcer { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

@@ -17,6 +17,7 @@ test('format time handles zero, seconds, hour boundaries, and invalid input', ()
 test('saved timestamps are formatted safely', () => {
   assert.equal(formatDate(undefined), 'Unknown date');
   assert.equal(formatDate(NaN), 'Unknown date');
+  assert.equal(formatDate(1e20), 'Unknown date');
   assert.ok(formatDate(Date.UTC(2026, 0, 2)).includes('2026'));
 });
 
