@@ -136,6 +136,7 @@ test('archive snapshots are isolated, immutable, rate limited and restored with 
   const completed = saveActive(empty, game('done', 0, { completed: true }), 2);
   assert.equal(completed.activeId, 'done');
   assert.equal(listUnfinished(completed).length, 0);
+  assert.throws(() => saveActive(empty, { id: 'missing-kind', difficulty: 'easy' }), /kind/);
 });
 
 test('archive ordering, completion, duplicate ids, pruning, and input immutability', () => {
@@ -192,6 +193,11 @@ function freezeDeep(value) {
 
 test('daily calendar has deterministic future and today boundaries and validates dates', () => {
   const rows = dailyCalendar([rec('d', 1, 'medium', false, 1, 1)], { entries: { x: entry('x', 1, { dailyKey: '2024-02-28' }) } }, 2024, 2, Date.UTC(2024, 1, 28, 23, 59));
+  const calendarRecords = [rec('d', 1, 'medium', false, 1, 1)];
+  const calendarArchive = { entries: { x: entry('x', 1, { dailyKey: '2024-02-28' }) } };
+  const calendarBefore = structuredClone({ calendarRecords, calendarArchive });
+  dailyCalendar(calendarRecords, calendarArchive, 2024, 2, Date.UTC(2024, 1, 28, 23, 59));
+  assert.deepEqual({ calendarRecords, calendarArchive }, calendarBefore);
   assert.equal(rows.length, 29);
   assert.equal(rows[27].status, 'in-progress');
   assert.equal(rows[28].status, 'future');
@@ -346,8 +352,11 @@ test('import rejects malformed shapes and hostile ids, normalizes setting confli
   const malformedEntry = appData();
   malformedEntry.archive.entries.x = null;
   assert.throws(() => importData(current, importEnvelope(malformedEntry)), ImportError);
-  const hostile = appData({ id: '__proto__' });
-  assert.throws(() => importData(current, importEnvelope(hostile)), ImportError);
+  for (const id of ['__proto__', 'constructor', 'prototype']) {
+    const hostile = emptyApp();
+    Object.defineProperty(hostile.archive.entries, id, { enumerable: true, value: entry(id) });
+    assert.throws(() => importData(current, importEnvelope(hostile)), ImportError);
+  }
   const overRecovery = appData();
   overRecovery.archive.entries.x.recovery = Array.from({ length: 5 }, (_, i) => ({ savedAt: i, game: game(`g${i}`) }));
   const bounded = importData(emptyApp(), importEnvelope(overRecovery));
