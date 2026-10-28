@@ -84,3 +84,17 @@ export function moveIndex(index, dr, dc) {
   const c = ((index % 9) + dc + 9) % 9;
   return r * 9 + c;
 }
+
+/**
+ * Decide how a keyboard digit is applied, mirroring the number pad.
+ * Number-first mode: a plain digit selects (or toggles off) the active digit;
+ * Shift+digit still toggles a note in the selected cell. Cell-first mode, and
+ * any digit without a selected cell, behaves as before.
+ * @param {{digit:number, note?:boolean}} cmd
+ * @param {{inputMode:string, selected:number|null}} ctx
+ * @returns {'pick'|'apply'}
+ */
+export function digitKeyAction(cmd, { inputMode, selected }) {
+  if (selected === null) return "pick";
+  return inputMode === "number-first" && !cmd.note ? "pick" : "apply";
+}
