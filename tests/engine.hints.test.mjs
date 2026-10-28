@@ -20,6 +20,8 @@ for (const fixture of HINT_FIXTURES)
       solution = Object.freeze(solve(board)),
       notes = Object.freeze(Array(81).fill(511));
     assert.equal(countSolutions(board), 1, fixture.source);
+    if (fixture.original)
+      assert.deepEqual(solve([...fixture.original].map(Number)), solution);
     const hint = getHint(board, notes, solution);
     assert.equal(hint.technique, fixture.technique);
     assert.equal(hint.techniqueName, TECHNIQUES[fixture.technique].name);
@@ -149,9 +151,72 @@ test("focus can prefer a placement after eliminations and irrelevant simpler eli
     });
     assert.equal(hint.technique, "swordfish");
     assert.equal(hint.placement.index, step.placement.index);
+    // A focused alternative takes a separate elimination-closure path. Check
+    // the solution guard there too, rather than only the ordinary return path.
+    const mismatched = solution.slice();
+    mismatched[step.placement.index] = (step.placement.digit % 9) + 1;
+    assert.equal(
+      getHint([...f.puzzle].map(Number), [], mismatched, {
+        focusIndex: step.placement.index,
+      }),
+      null,
+    );
   }
   const triple = HINT_FIXTURES.find((f) => f.technique === "naked-triple");
   assert.equal(triple.chain.length, 2);
+});
+test("full playthroughs reach rare elimination chains with varying focus and hostile notes", () => {
+  const examples = [
+    ...["bf302", "xyz02", "h302", "lc201"].map((id) => ({
+      id,
+      puzzle: PUBLISHED_FIXTURES[id].original,
+      technique: {
+        bf302: "swordfish",
+        xyz02: "xyz-wing",
+        h302: "hidden-triple",
+        lc201: "claiming",
+      }[id],
+    })),
+    ...HINT_FIXTURES.filter((f) => f.id.startsWith("exemplars-")).map((f) => ({
+      ...f,
+      puzzle: f.original,
+    })),
+  ];
+  for (const fixture of examples) {
+    const board = [...fixture.puzzle].map(Number),
+      solution = solve(board),
+      seen = new Set();
+    let calls = 0;
+    while (board.includes(0)) {
+      const before = board.slice();
+      const hint = getHint(
+        Object.freeze(board.slice()),
+        Object.freeze(Array(81).fill(1)),
+        solution,
+        {
+          focusIndex: (calls * 17) % 81,
+        },
+      );
+      assert.ok(hint, fixture.id);
+      assert.equal(hint.placement.digit, solution[hint.placement.index]);
+      assert.equal(board[hint.placement.index], 0);
+      assert.equal(hint.steps.length, 3);
+      assert.ok(hint.steps.every((s) => s.text.trim()));
+      for (const step of hint.chain) {
+        seen.add(step.technique);
+        for (const e of step.eliminations)
+          assert.notEqual(e.digit, solution[e.index]);
+      }
+      assert.deepEqual(board, before);
+      board[hint.placement.index] = hint.placement.digit;
+      assert.ok(++calls <= 81);
+    }
+    assert.ok(
+      seen.has(fixture.technique),
+      `${fixture.id} must reach ${fixture.technique}`,
+    );
+    assert.deepEqual(board, solution);
+  }
 });
 test("all deductions on published positions preserve independently solved grids", () => {
   for (const fixture of Object.values(PUBLISHED_FIXTURES)) {
@@ -256,10 +321,14 @@ test("findNextStep treats explicit null candidates as omitted candidates", () =>
 test("getHint rejects placements inconsistent with the supplied solution, including focused chains", () => {
   for (const fixture of HINT_FIXTURES) {
     const board = Object.freeze([...fixture.puzzle].map(Number));
-    const solution = solve(board), hint = getHint(board, [], solution);
+    const solution = solve(board),
+      hint = getHint(board, [], solution);
     const mismatched = solution.slice();
-    mismatched[hint.placement.index] = hint.placement.digit % 9 + 1;
+    mismatched[hint.placement.index] = (hint.placement.digit % 9) + 1;
     assert.equal(getHint(board, [], mismatched), null);
-    assert.equal(getHint(board, [], mismatched, {focusIndex: hint.placement.index}), null);
+    assert.equal(
+      getHint(board, [], mismatched, { focusIndex: hint.placement.index }),
+      null,
+    );
   }
 });

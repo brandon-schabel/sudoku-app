@@ -63,36 +63,39 @@ export function generatePuzzle(
     ? Math.max(0, Math.min(100, Math.floor(maxAttempts)))
     : 6;
   for (let attempt = 0; attempt < attempts; attempt++) {
-      const puzzle = generateSolvedBoard(rng),
-        order = shuffle(
-          Array.from({ length: 81 }, (_, i) => i),
-          rng,
-        );
-      let clues = 81;
-      for (const index of order) {
-        const value = puzzle[index];
-        puzzle[index] = 0;
-        if (countSolutions(puzzle) !== 1) {
-          puzzle[index] = value;
-          continue;
-        }
-        clues--;
-        if (clues > { easy: 40, medium: 34, hard: 30, expert: 28 }[difficulty]) continue;
-        const result = grade(puzzle);
-        if (result.difficulty === difficulty) return finish(puzzle, result);
-        if (
-          result.difficulty === null ||
-          DIFFICULTIES.indexOf(result.difficulty) >
-            DIFFICULTIES.indexOf(difficulty)
-        )
-          break;
+    const puzzle = generateSolvedBoard(rng),
+      order = shuffle(
+        Array.from({ length: 81 }, (_, i) => i),
+        rng,
+      );
+    let clues = 81;
+    for (const index of order) {
+      const value = puzzle[index];
+      puzzle[index] = 0;
+      if (countSolutions(puzzle) !== 1) {
+        puzzle[index] = value;
+        continue;
       }
+      clues--;
+      if (clues > { easy: 40, medium: 34, hard: 30, expert: 28 }[difficulty])
+        continue;
+      const result = grade(puzzle);
+      if (result.difficulty === difficulty) return finish(puzzle, result);
+      if (
+        result.difficulty === null ||
+        DIFFICULTIES.indexOf(result.difficulty) >
+          DIFFICULTIES.indexOf(difficulty)
+      )
+        break;
     }
+  }
   // DAILY_VERSION 1 includes the original fallback selection and ordering, even
   // for seeds whose six fresh attempts fail. Expanding the random-play bank must
   // not silently change an existing daily on another device or after an update.
-  const bank = difficulty === "medium" && seed.startsWith("daily:1:")
-    ? DAILY_V1_BANK : PUZZLE_BANK[difficulty];
+  const bank =
+    difficulty === "medium" && seed.startsWith("daily:1:")
+      ? DAILY_V1_BANK
+      : PUZZLE_BANK[difficulty];
   // Symmetries can change the simplest-first route, so every variant is regraded.
   for (let attempt = 0; attempt < 32; attempt++) {
     const base = bank[Math.floor(rng() * bank.length)],
@@ -114,7 +117,9 @@ export async function generatePuzzleAsync(difficulty, opts) {
   if (typeof globalThis.Worker !== "function")
     return generatePuzzle(difficulty, opts);
   return new Promise((resolve, reject) => {
-    let worker, timer, settled = false;
+    let worker,
+      timer,
+      settled = false;
     const cleanup = () => {
       clearTimeout(timer);
       if (worker) {

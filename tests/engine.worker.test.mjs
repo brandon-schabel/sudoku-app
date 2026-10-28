@@ -51,23 +51,35 @@ test("real worker module handles messages concurrently and returns errors; every
 });
 test("a stalled worker falls back after 12 seconds, terminates once, and ignores late events", async (t) => {
   const previous = globalThis.Worker;
-  let terminations = 0, lateMessage, lateError;
-  t.mock.timers.enable({apis: ["setTimeout"]});
+  let terminations = 0,
+    lateMessage,
+    lateError;
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     globalThis.Worker = class {
-      postMessage() {lateMessage = this.onmessage; lateError = this.onerror;}
-      terminate() {terminations++;}
+      postMessage() {
+        lateMessage = this.onmessage;
+        lateError = this.onerror;
+      }
+      terminate() {
+        terminations++;
+      }
     };
-    const expected = generatePuzzle("hard", {seed: "stalled"});
+    const expected = generatePuzzle("hard", { seed: "stalled" });
     let done = false;
-    const pending = generatePuzzleAsync("hard", {seed: "stalled"}).then((result) => {done = true; return result;});
+    const pending = generatePuzzleAsync("hard", { seed: "stalled" }).then(
+      (result) => {
+        done = true;
+        return result;
+      },
+    );
     t.mock.timers.tick(11_999);
     await Promise.resolve();
     assert.equal(done, false);
     t.mock.timers.tick(1);
     assert.deepEqual(await pending, expected);
     assert.equal(terminations, 1);
-    lateMessage({data: {error: "late response"}});
+    lateMessage({ data: { error: "late response" } });
     lateError(new Error("late error"));
     t.mock.timers.tick(24_000);
     assert.equal(terminations, 1);
@@ -79,18 +91,27 @@ test("a stalled worker falls back after 12 seconds, terminates once, and ignores
 });
 test("worker replies and failures clear their timeout", async (t) => {
   const previous = globalThis.Worker;
-  t.mock.timers.enable({apis: ["setTimeout"]});
+  t.mock.timers.enable({ apis: ["setTimeout"] });
   try {
     for (const error of [false, true]) {
       let terminations = 0;
-      const expected = generatePuzzle("easy", {seed: "replied"});
+      const expected = generatePuzzle("easy", { seed: "replied" });
       globalThis.Worker = class {
         postMessage() {
-          queueMicrotask(() => error ? this.onerror(new Error("blocked")) : this.onmessage({data: {result: expected}}));
+          queueMicrotask(() =>
+            error
+              ? this.onerror(new Error("blocked"))
+              : this.onmessage({ data: { result: expected } }),
+          );
         }
-        terminate() {terminations++;}
+        terminate() {
+          terminations++;
+        }
       };
-      assert.deepEqual(await generatePuzzleAsync("easy", {seed: "replied"}), expected);
+      assert.deepEqual(
+        await generatePuzzleAsync("easy", { seed: "replied" }),
+        expected,
+      );
       t.mock.timers.tick(20_000);
       assert.equal(terminations, 1);
     }

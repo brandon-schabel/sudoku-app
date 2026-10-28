@@ -15,7 +15,8 @@ import { diversityFingerprint, DIVERSITY_FLOORS } from "./bank-diversity.js";
 
 const bank = { easy: [], medium: [], hard: [], expert: [] };
 const seen = Object.fromEntries(Object.keys(bank).map((d) => [d, new Set()]));
-const target = 384, randomMinimum = 320;
+const target = 384,
+  randomMinimum = 320;
 const donors = new Map();
 function shuffle(values, rng) {
   for (let i = values.length - 1; i > 0; i--) {
@@ -25,7 +26,8 @@ function shuffle(values, rng) {
   return values;
 }
 function accept(puzzle, seed, limit, required) {
-  const result = grade(puzzle), d = result.difficulty;
+  const result = grade(puzzle),
+    d = result.difficulty;
   if (!d || (required && result.hardest !== required)) return false;
   if (!donors.has(result.hardest)) donors.set(result.hardest, puzzle.slice());
   if (bank[d].length >= limit) return false;
@@ -36,14 +38,21 @@ function accept(puzzle, seed, limit, required) {
   return true;
 }
 function harvest(seed, limit) {
-  const rng = createRng(`bank-v2:${seed}`), puzzle = generateSolvedBoard(rng);
-  const order = shuffle(Array.from({ length: 81 }, (_, i) => i), rng);
+  const rng = createRng(`bank-v2:${seed}`),
+    puzzle = generateSolvedBoard(rng);
+  const order = shuffle(
+    Array.from({ length: 81 }, (_, i) => i),
+    rng,
+  );
   const collected = new Set();
   let clues = 81;
   for (const index of order) {
     const value = puzzle[index];
     puzzle[index] = 0;
-    if (countSolutions(puzzle) !== 1) { puzzle[index] = value; continue; }
+    if (countSolutions(puzzle) !== 1) {
+      puzzle[index] = value;
+      continue;
+    }
     clues--;
     if (clues > 40) continue;
     const d = grade(puzzle).difficulty;
@@ -52,13 +61,22 @@ function harvest(seed, limit) {
   }
 }
 function progress(label) {
-  process.stderr.write(`${label}: ${JSON.stringify(Object.fromEntries(
-    Object.entries(bank).map(([d, puzzles]) => [d, { n: puzzles.length,
-      hardest: puzzles.reduce((counts, p) => {
-        counts[p.hardest] = (counts[p.hardest] ?? 0) + 1;
-        return counts;
-      }, {}) }]),
-  ))}\n`);
+  process.stderr.write(
+    `${label}: ${JSON.stringify(
+      Object.fromEntries(
+        Object.entries(bank).map(([d, puzzles]) => [
+          d,
+          {
+            n: puzzles.length,
+            hardest: puzzles.reduce((counts, p) => {
+              counts[p.hardest] = (counts[p.hardest] ?? 0) + 1;
+              return counts;
+            }, {}),
+          },
+        ]),
+      ),
+    )}\n`,
+  );
 }
 let seed = 0;
 while (Object.values(bank).some((puzzles) => puzzles.length < randomMinimum)) {
@@ -68,20 +86,31 @@ while (Object.values(bank).some((puzzles) => puzzles.length < randomMinimum)) {
 }
 // Published technique examples provide donors only if random harvesting missed
 // a rare technique. Source attribution stays in the fixture files.
-for (const f of Object.values(PUBLISHED_FIXTURES)) accept([...f.original].map(Number), `published:${f.source}`, 0);
-for (const f of HINT_FIXTURES) accept([...f.puzzle].map(Number), `hint:${f.id}`, 0);
+for (const f of Object.values(PUBLISHED_FIXTURES))
+  accept([...f.original].map(Number), `published:${f.source}`, 0);
+for (const f of HINT_FIXTURES)
+  accept([...f.puzzle].map(Number), `hint:${f.id}`, 0);
 for (const [d, floors] of Object.entries(DIVERSITY_FLOORS))
   for (const [technique, floor] of Object.entries(floors)) {
     const donor = donors.get(technique);
     if (!donor) throw Error(`No donor for ${technique}`);
-    const solution = solve(donor), rng = createRng(`bank-v2:diversity:${technique}`);
+    const solution = solve(donor),
+      rng = createRng(`bank-v2:diversity:${technique}`);
     let attempt = 0;
     while (bank[d].filter((p) => p.hardest === technique).length < floor) {
-      if (attempt++ > 20000) throw Error(`Diversity target not reached: ${technique}`);
+      if (attempt++ > 20000)
+        throw Error(`Diversity target not reached: ${technique}`);
       const puzzle = donor.slice();
-      const filled = shuffle(puzzle.flatMap((v, i) => v ? [i] : []), rng);
-      const empty = shuffle(puzzle.flatMap((v, i) => v ? [] : [i]), rng);
-      const remove = 1 + Math.floor(rng() * 4), add = Math.floor(rng() * 4);
+      const filled = shuffle(
+        puzzle.flatMap((v, i) => (v ? [i] : [])),
+        rng,
+      );
+      const empty = shuffle(
+        puzzle.flatMap((v, i) => (v ? [] : [i])),
+        rng,
+      );
+      const remove = 1 + Math.floor(rng() * 4),
+        add = Math.floor(rng() * 4);
       for (const i of filled.slice(0, remove)) puzzle[i] = 0;
       for (const i of empty.slice(0, add)) puzzle[i] = solution[i];
       accept(puzzle, `diversity:${technique}:${attempt}`, target, technique);
@@ -93,12 +122,18 @@ while (Object.values(bank).some((puzzles) => puzzles.length < target)) {
   harvest(seed++, target);
 }
 // Compact rows retain provenance for inspection without shipping repeated keys.
-const rows = Object.fromEntries(Object.entries(bank).map(([d, puzzles]) =>
-  [d, puzzles.map((p) => [p.seed, p.puzzle, p.hardest])]));
-writeFileSync(new URL("../bank.js", import.meta.url),
+const rows = Object.fromEntries(
+  Object.entries(bank).map(([d, puzzles]) => [
+    d,
+    puzzles.map((p) => [p.seed, p.puzzle, p.hardest]),
+  ]),
+);
+writeFileSync(
+  new URL("../bank.js", import.meta.url),
   `/** Offline bank v2: 384 non-isomorphic sources per tier. Regenerate with tools/build-bank.mjs. */\n` +
-  `const rows = ${JSON.stringify(rows)};\n` +
-  `/** Unique, pregraded fallback sources; runtime variants are always regraded. */\n` +
-  `export const PUZZLE_BANK = Object.fromEntries(Object.entries(rows).map(([d, entries]) =>\n` +
-  `  [d, entries.map(([seed, puzzle, hardest]) => ({seed, puzzle, hardest}))]));\n`);
+    `const rows = ${JSON.stringify(rows)};\n` +
+    `/** Unique, pregraded fallback sources; runtime variants are always regraded. */\n` +
+    `export const PUZZLE_BANK = Object.fromEntries(Object.entries(rows).map(([d, entries]) =>\n` +
+    `  [d, entries.map(([seed, puzzle, hardest]) => ({seed, puzzle, hardest}))]));\n`,
+);
 progress("complete");

@@ -112,7 +112,7 @@ export function computeCandidates(board) {
 /** Replace notes, or intersect existing notes and populate missing/empty/stale notes. Pure. */
 export function autoNotes(board, notes, { mode = "replace" } = {}) {
   return computeCandidates(board).map((m, i) =>
-    mode === "merge" ? (m & notes?.[i]) || m : m,
+    mode === "merge" ? m & notes?.[i] || m : m,
   );
 }
 /** Describe peer note removals after a placement, without changing either input. */

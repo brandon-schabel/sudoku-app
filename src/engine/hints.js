@@ -245,7 +245,9 @@ function baseHint(board, solution, focusIndex) {
  */
 export function getHint(board, notes, solution, { focusIndex } = {}) {
   const hint = focusedHint(board, solution, focusIndex);
-  return hint && hint.placement.digit === solution[hint.placement.index] ? hint : null;
+  return hint && hint.placement.digit === solution[hint.placement.index]
+    ? hint
+    : null;
 }
 
 function focusedHint(board, solution, focusIndex) {

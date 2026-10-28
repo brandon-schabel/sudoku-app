@@ -577,4 +577,490 @@ export const HINT_FIXTURES = [
       },
     ],
   },
+  {
+    id: "bf302",
+    source: "https://hodoku.sourceforge.net/en/show_example.php?file=bf302",
+    puzzle:
+      "108500234500302178000800569800605793005900481300008652980206310000000800000780900",
+    technique: "swordfish",
+    cells: [10, 11, 13, 28, 29, 31, 48, 56, 58],
+    eliminations: [
+      {
+        index: 19,
+        digit: 4,
+      },
+      {
+        index: 20,
+        digit: 4,
+      },
+      {
+        index: 22,
+        digit: 4,
+      },
+      {
+        index: 46,
+        digit: 4,
+      },
+      {
+        index: 47,
+        digit: 4,
+      },
+      {
+        index: 49,
+        digit: 4,
+      },
+      {
+        index: 64,
+        digit: 4,
+      },
+      {
+        index: 65,
+        digit: 4,
+      },
+      {
+        index: 67,
+        digit: 4,
+      },
+      {
+        index: 73,
+        digit: 4,
+      },
+      {
+        index: 74,
+        digit: 4,
+      },
+    ],
+    placement: {
+      index: 48,
+      digit: 4,
+    },
+    chain: [
+      {
+        technique: "swordfish",
+        cells: [10, 11, 13, 28, 29, 31, 56, 58],
+        eliminations: [
+          {
+            index: 19,
+            digit: 4,
+          },
+          {
+            index: 20,
+            digit: 4,
+          },
+          {
+            index: 22,
+            digit: 4,
+          },
+          {
+            index: 46,
+            digit: 4,
+          },
+          {
+            index: 47,
+            digit: 4,
+          },
+          {
+            index: 49,
+            digit: 4,
+          },
+          {
+            index: 64,
+            digit: 4,
+          },
+          {
+            index: 65,
+            digit: 4,
+          },
+          {
+            index: 67,
+            digit: 4,
+          },
+          {
+            index: 73,
+            digit: 4,
+          },
+          {
+            index: 74,
+            digit: 4,
+          },
+        ],
+        placement: null,
+      },
+      {
+        technique: "hidden-single",
+        cells: [48],
+        eliminations: [],
+        placement: {
+          index: 48,
+          digit: 4,
+        },
+      },
+    ],
+  },
+  {
+    id: "xyz02",
+    source: "https://hodoku.sourceforge.net/en/show_example.php?file=xyz02",
+    puzzle:
+      "673080209514092003982000005167359002809010536005800791006140928001008354008000167",
+    technique: "xyz-wing",
+    cells: [12, 21, 24, 50],
+    eliminations: [
+      {
+        index: 22,
+        digit: 6,
+      },
+      {
+        index: 23,
+        digit: 6,
+      },
+    ],
+    placement: {
+      index: 50,
+      digit: 6,
+    },
+    chain: [
+      {
+        technique: "xyz-wing",
+        cells: [12, 21, 24],
+        eliminations: [
+          {
+            index: 22,
+            digit: 6,
+          },
+          {
+            index: 23,
+            digit: 6,
+          },
+        ],
+        placement: null,
+      },
+      {
+        technique: "hidden-single",
+        cells: [50],
+        eliminations: [],
+        placement: {
+          index: 50,
+          digit: 6,
+        },
+      },
+    ],
+  },
+  {
+    id: "h302",
+    source: "https://hodoku.sourceforge.net/en/show_example.php?file=h302",
+    puzzle:
+      "500620037004890000000050000930000000020000605700000003000009000000000700680570002",
+    technique: "hidden-triple",
+    cells: [32, 41, 50, 68],
+    eliminations: [
+      {
+        index: 32,
+        digit: 1,
+      },
+      {
+        index: 32,
+        digit: 4,
+      },
+      {
+        index: 32,
+        digit: 7,
+      },
+      {
+        index: 32,
+        digit: 8,
+      },
+      {
+        index: 50,
+        digit: 1,
+      },
+      {
+        index: 50,
+        digit: 4,
+      },
+      {
+        index: 50,
+        digit: 8,
+      },
+      {
+        index: 68,
+        digit: 1,
+      },
+      {
+        index: 68,
+        digit: 3,
+      },
+      {
+        index: 68,
+        digit: 4,
+      },
+      {
+        index: 68,
+        digit: 8,
+      },
+    ],
+    placement: {
+      index: 41,
+      digit: 8,
+    },
+    chain: [
+      {
+        technique: "hidden-triple",
+        cells: [32, 50, 68],
+        eliminations: [
+          {
+            index: 32,
+            digit: 1,
+          },
+          {
+            index: 32,
+            digit: 4,
+          },
+          {
+            index: 32,
+            digit: 7,
+          },
+          {
+            index: 32,
+            digit: 8,
+          },
+          {
+            index: 50,
+            digit: 1,
+          },
+          {
+            index: 50,
+            digit: 4,
+          },
+          {
+            index: 50,
+            digit: 8,
+          },
+          {
+            index: 68,
+            digit: 1,
+          },
+          {
+            index: 68,
+            digit: 3,
+          },
+          {
+            index: 68,
+            digit: 4,
+          },
+          {
+            index: 68,
+            digit: 8,
+          },
+        ],
+        placement: null,
+      },
+      {
+        technique: "hidden-single",
+        cells: [41],
+        eliminations: [],
+        placement: {
+          index: 41,
+          digit: 8,
+        },
+      },
+    ],
+  },
+  {
+    id: "exemplars-116",
+    source:
+      "https://hodoku.sourceforge.net/libraries/exemplars-1.0.txt (line 116, s n3(8) s; position after singles)",
+    original:
+      "000080057060379000020000000000700000000004596032900040006450320000000000000000008",
+    puzzle:
+      "000082057065379204020540003600715832000234596532968741006450329000800005050000008",
+    technique: "naked-triple",
+    cells: [9, 18, 36, 54],
+    eliminations: [
+      {
+        index: 0,
+        digit: 1,
+      },
+      {
+        index: 18,
+        digit: 1,
+      },
+      {
+        index: 18,
+        digit: 7,
+      },
+      {
+        index: 18,
+        digit: 8,
+      },
+      {
+        index: 63,
+        digit: 1,
+      },
+      {
+        index: 63,
+        digit: 7,
+      },
+      {
+        index: 72,
+        digit: 1,
+      },
+      {
+        index: 72,
+        digit: 7,
+      },
+    ],
+    placement: {
+      index: 18,
+      digit: 9,
+    },
+    chain: [
+      {
+        technique: "naked-triple",
+        cells: [9, 36, 54],
+        eliminations: [
+          {
+            index: 0,
+            digit: 1,
+          },
+          {
+            index: 18,
+            digit: 1,
+          },
+          {
+            index: 18,
+            digit: 7,
+          },
+          {
+            index: 18,
+            digit: 8,
+          },
+          {
+            index: 63,
+            digit: 1,
+          },
+          {
+            index: 63,
+            digit: 7,
+          },
+          {
+            index: 72,
+            digit: 1,
+          },
+          {
+            index: 72,
+            digit: 7,
+          },
+        ],
+        placement: null,
+      },
+      {
+        technique: "naked-single",
+        cells: [18],
+        eliminations: [],
+        placement: {
+          index: 18,
+          digit: 9,
+        },
+      },
+    ],
+  },
+  {
+    id: "exemplars-117",
+    source:
+      "https://hodoku.sourceforge.net/libraries/exemplars-1.0.txt (line 117, s n3(8) s; position after singles)",
+    original:
+      "001900058060000000203000400800000065900635040000002000630001000105376000000040000",
+    puzzle:
+      "471903058560004000203000400800000365917635842356482000630001000105376000700040000",
+    technique: "naked-triple",
+    cells: [73, 74, 75, 77],
+    eliminations: [
+      {
+        index: 75,
+        digit: 2,
+      },
+      {
+        index: 75,
+        digit: 8,
+      },
+      {
+        index: 78,
+        digit: 2,
+      },
+      {
+        index: 78,
+        digit: 9,
+      },
+      {
+        index: 79,
+        digit: 2,
+      },
+      {
+        index: 79,
+        digit: 8,
+      },
+      {
+        index: 79,
+        digit: 9,
+      },
+      {
+        index: 80,
+        digit: 9,
+      },
+    ],
+    placement: {
+      index: 75,
+      digit: 5,
+    },
+    chain: [
+      {
+        technique: "naked-triple",
+        cells: [73, 74, 77],
+        eliminations: [
+          {
+            index: 75,
+            digit: 2,
+          },
+          {
+            index: 75,
+            digit: 8,
+          },
+          {
+            index: 78,
+            digit: 2,
+          },
+          {
+            index: 78,
+            digit: 9,
+          },
+          {
+            index: 79,
+            digit: 2,
+          },
+          {
+            index: 79,
+            digit: 8,
+          },
+          {
+            index: 79,
+            digit: 9,
+          },
+          {
+            index: 80,
+            digit: 9,
+          },
+        ],
+        placement: null,
+      },
+      {
+        technique: "naked-single",
+        cells: [75],
+        eliminations: [],
+        placement: {
+          index: 75,
+          digit: 5,
+        },
+      },
+    ],
+  },
 ];
