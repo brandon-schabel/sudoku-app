@@ -9,7 +9,7 @@ NOTE: "Still Sudoku" is the working name inherited from the spec; **check tradem
 - **Promotional text (≤170):** Just the puzzle. No ads, no accounts, no tracking. Learn new techniques with step-by-step hints, play offline, and pick a theme that feels right.
 - **Keywords (≤100, comma-separated, no spaces):** `sudoku,puzzle,logic,numbers,brain,offline,daily,classic,hints,notes,calm,minimal`  *(80)*
 - **Description (≤4000):** see "Long description" below.
-- **What's new (1.0):** First release. Five difficulty levels graded by solving technique, 3-step teaching hints, notes, undo/redo, daily puzzle, statistics, six themes with dark mode, and full offline play.
+- **What's new (1.0):** First release. Four difficulty levels graded by solving technique, 3-step teaching hints, notes, undo/redo, daily puzzle, statistics, six themes with dark mode, and full offline play.
 - **Primary category:** Games → Puzzle. **Secondary:** Games → Board.
 - **Support URL:** PLACEHOLDER (e.g. GitHub Pages site or repo issues page)
 - **Marketing URL:** optional
