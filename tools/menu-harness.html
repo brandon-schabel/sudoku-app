@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" data-theme="graphite" data-mode="light" data-text="default" data-motion="reduce">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Sudoku menu harness</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../styles/themes.css">
+  <link rel="stylesheet" href="../styles/menu.css">
+  <style>
+    body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui; }
+    main { max-width: 800px; margin: auto; }
+    nav { display: flex; gap: 8px; flex-wrap: wrap; }
+    nav button { min-height: 44px; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+  </style>
+</head>
+<body>
+  <main><h1>Sudoku menu harness</h1><p>Standalone mock facade for C2 visual and interaction checks.</p><nav id="harness-nav" aria-label="Harness views"></nav><p id="harness-action" role="status"></p></main>
+  <div id="menu-root"></div><div id="win-root"></div><div id="onboarding-root"></div>
+  <script type="module" src="./menu-harness.js"></script>
+</body>
+</html>

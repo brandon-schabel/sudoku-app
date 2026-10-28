@@ -1,22 +1,13 @@
-/**
- * STUB owned by C2 (docs/UI-CONTRACT.md): tiny h() helper. C2 replaces this file.
- * @module ui/dom
- */
-
-/**
- * @param {string} tag
- * @param {Record<string, any>} [props]
- * @param {...(Node|string|null|false)} children
- * @returns {HTMLElement}
- */
-export function h(tag, props = {}, ...children) {
+/** Build an element with safe text children, attributes, and event listeners. */
+export function h(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(props || {})) {
-    if (v === null || v === undefined || v === false) continue;
-    if (k === "class") node.className = v;
-    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2).toLowerCase(), v);
-    else node.setAttribute(k, v === true ? "" : String(v));
+  for (const [key, value] of Object.entries(attributes)) {
+    if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2).toLowerCase(), value);
+    else if (key === 'className') node.className = value;
+    else if (value !== false && value != null) node.setAttribute(key, value === true ? '' : String(value));
   }
-  for (const c of children.flat()) if (c !== null && c !== false && c !== undefined) node.append(c);
+  for (const child of children.flat(Infinity)) {
+    if (child != null && child !== false) node.append(child instanceof Node ? child : document.createTextNode(String(child)));
+  }
   return node;
 }
