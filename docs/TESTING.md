@@ -1,9 +1,7 @@
 # Testing
 
-Run the domain and engine suite with `npm test`. Run the browser suite with `npm run test:e2e`; it uses Playwright Chromium and runs at phone portrait (390×844), phone landscape (844×390), desktop (1440×900), and tablet (820×1180).
+Run `node --test` for the engine, domain, and game unit suites. Run `npx playwright test` for the browser suite. Playwright starts the E-owned static server in `tests/e2e/server.mjs` and exercises phone portrait (390×844), phone landscape (844×390), desktop (1440×900), and tablet (820×1180). Set `BASE_URL` to use a separately hosted preview. Set `SCREENSHOT_DIR` to choose the screenshot root; screenshots are written as `<project>/<name>.png`.
 
-`tools/serve.mjs` serves the repository root without dependencies, preserves query strings, rejects paths outside the repository, and supports nested asset paths. Set `BASE_URL` to run against a deployed preview instead of starting the local server. Set `SCREENSHOT_DIR` to choose where project/name screenshots are written; the default is `test-results/screenshots`.
+The browser suite covers first-run onboarding, cell-first and number-first entry, notes and auto-notes, undo/redo save reload, three-step hints, checks without game-over, win records and assisted/unassisted statistics, archive retention, daily calendar, all six themes and light/dark persistence, settings, a real legacy v1 save migration, layout and touch targets, PWA manifest and offline reload, console errors, and axe scans of the game plus every menu view in light and dark modes. CI stores screenshots and the HTML Playwright report as artifacts.
 
-While the UI is still on its legacy markup, run the harness smoke check with `LEGACY=1 npx playwright test tests/e2e/smoke-legacy.spec.mjs --project=desktop`. The smoke check exercises the static server, viewport project, axe scan, and screenshot output. The legacy check is opt-in and is skipped during the normal suite. Full UI tests consume the `data-testid` hooks and test API defined in section 2.5 of `docs/ROADMAP.md`.
-
-The suite covers gameplay, notes and undo, hints and assisted play, save reload, keyboard shortcuts, menu and settings, legacy migration, archive retention, daily calendar, statistics and win flow, axe, console errors, mobile layout, and offline reload. It uses Playwright's condition-based waits and does not use fixed delays.
+`npm run screenshots:e2e` runs the same suite while saving screenshots under `test-results/screenshots`. Test results and Playwright reports are ignored by git.
