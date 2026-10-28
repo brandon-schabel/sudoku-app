@@ -623,7 +623,8 @@ button {
   .numpad { gap: 8px; }
   .key-digit { font-size: 2rem; }
   .key-left { font-size: 0.72rem; }
-  .controls { grid-template-rows: auto minmax(0, 1fr); }
+  .controls { grid-template-rows: auto minmax(0, 1fr); align-content: start; }
+  .numpad { max-height: min(100%, 360px); }
 }
 
 /* Portrait tablets: more room, single-row pad stays */
