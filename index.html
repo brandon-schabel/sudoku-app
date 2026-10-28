@@ -37,17 +37,17 @@
 
   <div class="app" id="app" data-ready="false">
     <main class="game" id="game" aria-label="Sudoku">
-      <div class="status" id="status" role="group" aria-label="Game status"></div>
-
       <section class="board-area" aria-label="Puzzle">
-        <div class="board-frame">
-          <div class="board" id="board" data-testid="board" role="grid" aria-label="Sudoku puzzle, 9 by 9" aria-describedby="board-help"></div>
-          <p class="sr-only" id="board-help">Use arrow keys to move, 1 to 9 to enter a digit, N for notes, Backspace to erase.</p>
-          <div class="toast" id="toast" role="status" hidden></div>
+        <div class="stack">
+          <div class="status" id="status" role="group" aria-label="Game status"></div>
+          <div class="board-frame">
+            <div class="board" id="board" data-testid="board" role="grid" aria-label="Sudoku puzzle, 9 by 9" aria-describedby="board-help"></div>
+            <p class="sr-only" id="board-help">Use arrow keys to move, 1 to 9 to enter a digit, N for notes, Backspace to erase.</p>
+            <div class="toast" id="toast" role="status" hidden></div>
+          </div>
+          <div class="progress" id="progress" data-testid="status-progress"></div>
         </div>
       </section>
-
-      <div class="progress" id="progress" data-testid="status-progress"></div>
 
       <section class="controls" aria-label="Controls">
         <div class="tools" id="tools" role="toolbar" aria-label="Tools"></div>

@@ -60,6 +60,22 @@ test("init with ?seed starts that deterministic game", async () => {
   assert.equal(ctl.settings().lastDifficulty, "hard");
 });
 
+test("reloading a ?seed URL resumes that game instead of overwriting it", async () => {
+  const backend = memoryBackend();
+  const a = setup({ backend });
+  await a.ctl.init({ seed: "abc", difficulty: "hard" });
+  const i = a.ctl.current().state.values.indexOf(0);
+  a.ctl.current().enterDigit(i, SOLUTION[i]);
+  a.ctl.commit();
+  const b = setup({ backend });
+  await b.ctl.init({ seed: "abc", difficulty: "hard" });
+  assert.equal(b.generated.length, 0);
+  assert.equal(b.ctl.game().values[i], SOLUTION[i]);
+  const c = setup({ backend });
+  await c.ctl.init({ seed: "abc", difficulty: "easy" });
+  assert.equal(c.generated.length, 1, "different difficulty is a different game");
+});
+
 test("a reload resumes the active game with its undo history", async () => {
   const backend = memoryBackend();
   const first = setup({ backend });

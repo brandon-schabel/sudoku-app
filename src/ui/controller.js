@@ -230,12 +230,25 @@ export function createController({
   }
 
   /**
-   * Initial game: `?seed=` forces a deterministic new game; otherwise resume
+   * Initial game: `?seed=` starts (or resumes) that deterministic game; otherwise resume
    * the active unfinished game, else start a new one.
    * @param {{seed?:string|null, difficulty?:string|null}} [opts]
    */
   async function init({ seed: forcedSeed = null, difficulty = null } = {}) {
-    if (forcedSeed) return newGame(difficulty || data.settings.lastDifficulty, { seed: forcedSeed });
+    if (forcedSeed) {
+      const diff = DIFFICULTIES.includes(difficulty) ? difficulty : data.settings.lastDifficulty;
+      // Reloading a ?seed= URL resumes that game instead of overwriting its progress.
+      const same = Object.values(data.archive.entries).find(
+        (e) => e.status !== "completed" && e.kind === "random" && e.game?.seed === String(forcedSeed) && e.difficulty === diff
+      );
+      if (same && loadEntry(same.id)) {
+        data.archive = resumeEntry(data.archive, same.id);
+        store.saveArchive(data.archive);
+        emit("change", { reason: "load" });
+        return;
+      }
+      return newGame(diff, { seed: forcedSeed });
+    }
     const active = data.archive.activeId && data.archive.entries[data.archive.activeId];
     if (active && active.status !== "completed" && loadEntry(active.id)) {
       emit("change", { reason: "load" });
