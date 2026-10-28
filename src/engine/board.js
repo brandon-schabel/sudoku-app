@@ -49,37 +49,13 @@ function shuffle(values, rng) {
   return values;
 }
 
-function legacyRng(seed) {
-  // mulberry32: small, fast, deterministic.
-  let a = seed >>> 0;
-  return function random() {
-    a = (a + 0x6d2b79f5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** Legacy-compatible board operation; inputs are not mutated. */
+/** Return a fresh array of the twenty peers, or an empty array for an invalid index. */
 export function getPeers(index) {
   if (!Number.isInteger(index) || index < 0 || index >= CELLS) return [];
   return PEERS[index].slice();
 }
 
-/** Legacy-compatible board operation; inputs are not mutated. */
-export function isPlacementValid(board, index, digit) {
-  if (!Array.isArray(board) || board.length !== CELLS) return false;
-  if (!Number.isInteger(index) || index < 0 || index >= CELLS) return false;
-  if (!Number.isInteger(digit) || digit < 0 || digit > 9) return false;
-  if (digit === 0) return true;
-  // Deliberately ignore board[index] so callers can validate a replacement.
-  for (const peer of PEERS[index]) {
-    if (board[peer] === digit) return false;
-  }
-  return true;
-}
-
-/** Legacy-compatible board operation; inputs are not mutated. */
+/** Return every cell involved in a duplicate digit in a row, column or box. */
 export function findConflicts(board) {
   const conflicts = new Set();
   if (!Array.isArray(board) || board.length !== CELLS) return conflicts;
@@ -114,16 +90,6 @@ export function findConflicts(board) {
   return conflicts;
 }
 
-/** Legacy-compatible board operation; inputs are not mutated. */
-export function isBoardComplete(board) {
-  if (!Array.isArray(board) || board.length !== CELLS) return false;
-  for (let i = 0; i < CELLS; i++) {
-    const value = board[i];
-    if (!Number.isInteger(value) || value < 1 || value > 9) return false;
-  }
-  return true;
-}
-
 function buildMasks(board) {
   if (!Array.isArray(board) || board.length !== CELLS) return null;
   const rowMask = new Int32Array(SIZE);
@@ -139,7 +105,7 @@ function buildMasks(board) {
     const b = boxOf(r, c);
     const bit = 1 << value;
     // Duplicate givens make the board unsolvable.
-    if ((rowMask[r] & bit) || (colMask[c] & bit) || (boxMask[b] & bit)) return null;
+    if (rowMask[r] & bit || colMask[c] & bit || boxMask[b] & bit) return null;
     rowMask[r] |= bit;
     colMask[c] |= bit;
     boxMask[b] |= bit;
@@ -215,21 +181,19 @@ function search(board, limit, rng) {
   return { count, solution };
 }
 
-/** Legacy-compatible board operation; inputs are not mutated. */
+/** Solve by most-constrained-first backtracking without mutating the input; invalid or unsolvable boards return null. */
 export function solve(board) {
   return search(board, 1, null).solution;
 }
 
-/** Legacy-compatible board operation; inputs are not mutated. */
+/** Count solutions up to the positive integer limit, without mutating the input. */
 export function countSolutions(board, limit = 2) {
   if (!Number.isInteger(limit) || limit <= 0) return 0;
   return search(board, limit, null).count;
 }
 
-/** Legacy-compatible board operation; inputs are not mutated. */
-export function generateSolvedBoard(rng = Math.random) {
-  const random = typeof rng === "function" ? rng : Math.random;
-  const result = search(new Array(CELLS).fill(0), 1, random);
+/** Create a solved grid using the supplied RNG to order search branches. */
+export function generateSolvedBoard(rng) {
+  const result = search(new Array(CELLS).fill(0), 1, rng);
   return result.solution;
 }
-

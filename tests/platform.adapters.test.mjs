@@ -157,3 +157,53 @@ test('share uses navigator.share, falls back to clipboard, swallows cancel', asy
     assert.equal(await platform.share({ text: 'x' }), false);
   });
 });
+
+test('native path registers plugins lazily via Capacitor.registerPlugin', async () => {
+  const calls = [];
+  const listeners = [];
+  const plugins = {
+    Haptics: { impact: (a) => calls.push(['impact', a]), notification: (a) => calls.push(['notification', a]) },
+    App: { addListener: (ev, fn) => { listeners.push([ev, fn]); return Promise.resolve({ remove: () => calls.push(['removed']) }); } },
+    InAppReview: { requestReview: async () => { calls.push(['review']); } },
+  };
+  const registered = [];
+  globalThis.window = {
+    Capacitor: {
+      isNativePlatform: () => true,
+      registerPlugin: (n) => { registered.push(n); return plugins[n]; },
+    },
+  };
+  try {
+    const m = await import('../src/platform/index.js');
+    assert.equal(registered.length, 0, 'nothing registered at import');
+    m.haptic('tap');
+    m.haptic('error');
+    assert.deepEqual(calls.slice(0, 2), [['impact', { style: 'LIGHT' }], ['notification', { type: 'ERROR' }]]);
+    assert.equal(await m.requestReview(), true);
+    assert.ok(calls.some((c) => c[0] === 'review'));
+    const seen = [];
+    const off = m.onAppStateChange((a) => seen.push(a));
+    assert.equal(listeners[0][0], 'appStateChange');
+    listeners[0][1]({ isActive: false });
+    assert.deepEqual(seen, [false]);
+    await new Promise((r) => setImmediate(r));
+    off();
+    assert.ok(calls.some((c) => c[0] === 'removed'));
+    for (const n of registered) assert.ok(['Haptics', 'App', 'InAppReview'].includes(n));
+  } finally {
+    delete globalThis.window;
+  }
+});
+
+test('web path stays a no-op when Capacitor is not native', async () => {
+  let registered = 0;
+  globalThis.window = { Capacitor: { isNativePlatform: () => false, registerPlugin: () => { registered++; return {}; } } };
+  try {
+    const m = await import('../src/platform/index.js');
+    m.haptic('tap');
+    assert.equal(await m.requestReview(), false);
+    assert.equal(registered, 0);
+  } finally {
+    delete globalThis.window;
+  }
+});
