@@ -481,7 +481,7 @@ document.addEventListener("keydown", (event) => {
 // Keyboard focus entering the board (Tab) selects the focused cell.
 $("board").addEventListener("focusin", (event) => {
   const cell = event.target.closest(".cell");
-  if (cell && Number(cell.dataset.index) !== ctl.selected() && event.target.matches(":focus-visible")) {
+  if (cell && Number(cell.dataset.index) !== ctl.selected()) {
     ctl.select(Number(cell.dataset.index));
     render();
   }

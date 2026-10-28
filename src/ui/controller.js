@@ -56,6 +56,8 @@ export function createController({
   schedule = (fn, ms) => setTimeout(fn, ms)
 }) {
   const store = createStore(backend);
+  /** Yield one task so the loading state can paint before (possibly synchronous) generation. */
+  const paint = () => new Promise((r) => setTimeout(r, 0));
   let data = store.load();
   /** @type {Game|null} */
   let game = null;
@@ -183,6 +185,7 @@ export function createController({
     if (game) save();
     setLoading(`Creating a${diff === "easy" || diff === "expert" ? "n" : ""} ${diff} puzzle…`);
     try {
+      await paint();
       const generated = await generate(diff, { seed: opts.seed ?? seed() });
       if (token !== loadToken) return;
       const next = Game.create(generated);
@@ -214,8 +217,7 @@ export function createController({
     const token = ++loadToken;
     setLoading("Preparing today’s puzzle…");
     try {
-      // Let the loading state paint before the synchronous daily generation.
-      await new Promise((r) => schedule(r, 0));
+      await paint();
       const generated = await daily(dateKey);
       if (token !== loadToken) return;
       const next = Game.create(generated, { kind: "daily", dailyKey: dateKey });
