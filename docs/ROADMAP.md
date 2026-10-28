@@ -22,7 +22,7 @@ tests/e2e/**/*.spec.mjs, playwright.config.mjs, .github/workflows/** (E)
 Rules:
 - `src/engine` and `src/domain` import nothing from `src/ui`, `src/platform`, `src/game.js`, or DOM/`localStorage` globals. `src/domain/storage.js` receives the backend as an argument.
 - Each layer exposes one barrel: `src/engine/index.js`, `src/domain/index.js`, `src/platform/index.js`. Consumers import **only** from the barrel.
-- Legacy `src/sudoku.js` and `src/storage.js` stay until C switches over, then C deletes them (or A turns `src/sudoku.js` into a re-export shim; A owns that file).
+- Legacy `src/sudoku.js` is owned only by A, who turns it into a re-export shim over `src/engine/index.js`; no other stream deletes it. Legacy `src/storage.js` stays until C switches over, then C (the only stream with it in its write set) deletes it.
 - Puzzle data stays in the current shapes: `Board = number[81]` (0 = empty, row-major), `Notes = number[81]` bitmask (bit `1 << (d-1)` = candidate d). `index = row*9 + col`, `box = floor(row/3)*3 + floor(col/3)`.
 - E2E specs use the `.spec.mjs` suffix so `node --test` never picks them up.
 
@@ -221,9 +221,9 @@ With `?test=1`, `window.__sudoku = { state():GameJSON, load(puzzle:Board, soluti
 | D store | Claude Sonnet | `src/platform/**`, `manifest.webmanifest`, `sw.js`, `assets/**`, `privacy.html`, `capacitor.config.json`, `ios/**`, `android/**`, `scripts/**`, `store/**`, `STORE-PUBLISHING.md`, `package.json`, `package-lock.json`, `.gitignore` | app UI files |
 | E quality | Codex | `tests/e2e/**`, `playwright.config.mjs`, `.github/workflows/**`, `docs/TESTING.md`, `docs/DEPLOY.md` | app code |
 
-- **Shared files:** D owns `package.json`. Other streams may only make small *additive* edits (one devDependency or script line) and must mention it in the PR. E needs `@playwright/test` and `@axe-core/playwright`, plus scripts `test:e2e` and `screenshots`. `docs/ROADMAP.md` belongs to the lead; contract changes go through the lead.
+- **Shared files:** D is the single owner of `package.json` and `package-lock.json`. Other streams do not edit them; they list the script or devDependency they need in `docs/CONTRACT-CHANGES.md` and the lead or D applies it (E needs `@playwright/test` and `@axe-core/playwright`, plus scripts `test:e2e` and `screenshots:e2e`). `docs/ROADMAP.md` belongs to the lead; contract changes go through the lead.
 - **Dependencies:** A and B are independent. C needs the A and B skeletons (§2.0). D is independent, but C needs `src/platform/index.js` to exist (D lands a no-op stub first). E can start right away against §2.5 and the current app; its final assertions need C.
-- **Merge order into the integration branch:** A-skeleton, B-skeleton, D-platform stub (any order) → C game v2 (C1) → A full, B full → C menu/stats/settings (C2) → D PWA/Capacitor/store → E e2e + deploy. After all of that: lead PR to `main`.
+- **Merge order (one PR per stream, stacked so each merges cleanly in order):** roadmap → A (engine) → B (domain) → D (platform, PWA, Capacitor, store) → C1 (game v2 UI) → C2 (menu, stats, settings) → E (e2e + CI). Each later branch contains its predecessors, so merging in this order is a fast, conflict-free sequence. Development happens in parallel against the contracts and skeletons; only the PR merge order is fixed.
 - Every PR: `node --test` green, no new runtime dependencies in the web app (Capacitor plugins are native-side only and loaded via `window.Capacitor` guards), relative paths only.
 
 ## 4. Work items (issues)
