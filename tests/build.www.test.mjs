@@ -33,6 +33,8 @@ test('build-www produces a self-contained shell with a stamped service worker', 
     const list = new Set(parsePrecache(sw));
     for (const f of shellFiles(out)) assert.ok(list.has(f), `precached: ${f}`);
     for (const f of list) if (f !== './') assert.ok(existsSync(join(out, f)), `exists in www: ${f}`);
+    const html = readFileSync(join(out, 'index.html'), 'utf8');
+    for (const m of html.matchAll(/(?:href|src)="(\.\/[^"#?]+)"/g)) assert.ok(existsSync(join(out, m[1])), `index.html reference exists in www: ${m[1]}`);
     assert.equal(buildWww(out).version, version, 'deterministic');
   } finally {
     rmSync(out, { recursive: true, force: true });
