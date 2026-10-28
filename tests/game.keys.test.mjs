@@ -65,3 +65,23 @@ test("shortcut legend covers every command", () => {
   const text = SHORTCUTS.map(([a, b]) => `${a} ${b}`).join(" ");
   for (const word of ["1–9", "Arrow", "Backspace", "N", "Z", "H", "P", "Esc"]) assert.ok(text.includes(word), word);
 });
+
+import { digitKeyAction } from "../src/ui/keys.js";
+import { readFileSync } from "node:fs";
+
+test("keyboard digits follow the input mode", () => {
+  const plain = { digit: 5 };
+  const note = { digit: 5, note: true };
+  assert.equal(digitKeyAction(plain, { inputMode: "cell-first", selected: 3 }), "apply");
+  assert.equal(digitKeyAction(note, { inputMode: "cell-first", selected: 3 }), "apply");
+  assert.equal(digitKeyAction(plain, { inputMode: "number-first", selected: 3 }), "pick");
+  assert.equal(digitKeyAction(note, { inputMode: "number-first", selected: 3 }), "apply");
+  assert.equal(digitKeyAction(plain, { inputMode: "cell-first", selected: null }), "pick");
+});
+
+test("skip link targets the board and main.js moves focus into the grid", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.match(html, /class="skip-link" href="#board"/);
+  const main = readFileSync(new URL("../src/main.js", import.meta.url), "utf8");
+  assert.match(main, /skip-link"\)\?\.addEventListener\("click"[\s\S]*?board\.focus\(\)/);
+});

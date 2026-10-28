@@ -13,7 +13,7 @@ import { createToolbar } from "./ui/toolbar.js";
 import { createStatus } from "./ui/status.js";
 import { createHintPanel } from "./ui/hint-panel.js";
 import { createConfirm } from "./ui/confirm.js";
-import { keyToCommand, moveIndex } from "./ui/keys.js";
+import { digitKeyAction, keyToCommand, moveIndex } from "./ui/keys.js";
 import { boardView, htmlAttributes, newlyShownErrors, padView } from "./ui/view-model.js";
 import { createMenu } from "./ui/menu/index.js";
 import { createWinDialog } from "./ui/win.js";
@@ -90,6 +90,10 @@ for (const mq of [media.dark, media.motion]) mq?.addEventListener?.("change", ap
 const app = buildFacade();
 const confirmDialog = createConfirm($("app"));
 const board = createBoard($("board"), { onCellTap });
+document.querySelector(".skip-link")?.addEventListener("click", (event) => {
+  event.preventDefault();
+  board.focus();
+});
 const pad = createPad($("numpad"), { onDigit });
 const toolbar = createToolbar($("tools"), onTool);
 const status = createStatus({ status: $("status"), progress: $("progress") }, { onPause: () => menu.open() });
@@ -451,7 +455,7 @@ document.addEventListener("keydown", (event) => {
   const selected = ctl.selected();
   switch (cmd.type) {
     case "digit":
-      if (selected === null) return onDigit(cmd.digit);
+      if (digitKeyAction(cmd, { inputMode: ctl.settings().inputMode, selected }) === "pick") return onDigit(cmd.digit);
       return applyDigit(selected, cmd.digit, cmd.note);
     case "move":
       ctl.select(moveIndex(selected, cmd.dr, cmd.dc));
