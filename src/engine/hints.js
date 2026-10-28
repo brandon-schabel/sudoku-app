@@ -235,6 +235,8 @@ function baseHint(board, solution, focusIndex) {
 
 /** Return a teaching hint using board candidates, with incorrect entries first and
  * focus preference among chains no harder than the simplest available hint.
+ * Returns null for completed boards or positions with no supported deduction
+ * (including an empty board), and when a deduction disagrees with solution.
  * @param {number[]} board
  * @param {number[]} notes Ignored: handwritten notes cannot justify a deduction.
  * @param {number[]} solution
@@ -242,6 +244,11 @@ function baseHint(board, solution, focusIndex) {
  * @returns {import('./index.js').Hint|null}
  */
 export function getHint(board, notes, solution, { focusIndex } = {}) {
+  const hint = focusedHint(board, solution, focusIndex);
+  return hint && hint.placement.digit === solution[hint.placement.index] ? hint : null;
+}
+
+function focusedHint(board, solution, focusIndex) {
   const hint = baseHint(board, solution, focusIndex);
   if (
     !hint ||

@@ -247,3 +247,19 @@ test("completed and unsupported positions have no invented placement", () => {
   assert.equal(getHint(Array(81).fill(0), [], solution), null);
   assert.equal(findNextStep(Array(81).fill(0)), null);
 });
+test("findNextStep treats explicit null candidates as omitted candidates", () => {
+  for (const fixture of HINT_FIXTURES) {
+    const board = Object.freeze([...fixture.puzzle].map(Number));
+    assert.deepEqual(findNextStep(board, null), findNextStep(board));
+  }
+});
+test("getHint rejects placements inconsistent with the supplied solution, including focused chains", () => {
+  for (const fixture of HINT_FIXTURES) {
+    const board = Object.freeze([...fixture.puzzle].map(Number));
+    const solution = solve(board), hint = getHint(board, [], solution);
+    const mismatched = solution.slice();
+    mismatched[hint.placement.index] = hint.placement.digit % 9 + 1;
+    assert.equal(getHint(board, [], mismatched), null);
+    assert.equal(getHint(board, [], mismatched, {focusIndex: hint.placement.index}), null);
+  }
+});

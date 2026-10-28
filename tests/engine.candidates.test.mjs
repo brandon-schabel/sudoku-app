@@ -61,12 +61,30 @@ test("candidates and both auto-note modes agree with independent brute force and
     assert.deepEqual(autoNotes(board, notes), expected);
     assert.deepEqual(
       autoNotes(board, notes, { mode: "merge" }),
-      expected.map((m, i) => (notes[i] ? m & notes[i] : m)),
+      expected.map((m, i) => (m & notes[i]) || m),
     );
     const result = autoNotes(board, notes);
     result.fill(0);
     assert.deepEqual(computeCandidates(board), expected);
   }
+});
+test("autoNotes merge recovers missing, sparse and wholly stale notes while preserving legal subsets", () => {
+  const board = Object.freeze(generatePuzzle("medium", {seed: "legacy-notes"}).puzzle);
+  const expected = computeCandidates(board);
+  for (const notes of [undefined, null, Object.freeze([]), Object.freeze(Array(81).fill(0))]) {
+    assert.deepEqual(autoNotes(board, notes), expected);
+    assert.deepEqual(autoNotes(board, notes, {mode: "merge"}), expected);
+  }
+  const stale = Object.freeze(expected.map((m) => 511 & ~m));
+  assert.deepEqual(autoNotes(board, stale, {mode: "merge"}), expected);
+  const partial = Object.freeze(expected.map((m) => m & -m));
+  assert.deepEqual(autoNotes(board, partial, {mode: "merge"}), partial);
+  assert.ok(autoNotes(board, stale, {mode: "merge"}).every((m, i) => board[i] ? m === 0 : m !== 0));
+});
+test("notesCleanup ignores invalid digits without mutating inputs", () => {
+  const board = Object.freeze(Array(81).fill(0)), notes = Object.freeze(Array(81).fill(511));
+  for (const digit of [0, -1, 10, 1.5, NaN, Infinity, undefined, null, "4"])
+    assert.deepEqual(notesCleanup(board, notes, 0, digit), []);
 });
 test("cleanup removes only the placed digit from empty peers and reports exact before/after masks", () => {
   const board = generatePuzzle("easy", { seed: "cleanup" }).puzzle,
