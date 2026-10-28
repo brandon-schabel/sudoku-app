@@ -1,0 +1,24 @@
+/* STUB owned by C2 (docs/UI-CONTRACT.md): Graphite light/dark only. C2 replaces this
+ * file with all six themes × light/dark (contrast-checked). */
+:root[data-mode="dark"] {
+  --bg: #16181b;
+  --surface: #1f2226;
+  --surface-2: #2a2e33;
+  --text: #eceef0;
+  --text-muted: #a3a9b1;
+  --border: #3a3f46;
+  --accent: #c9ced6;
+  --accent-contrast: #16181b;
+  --cell-bg: #1f2226;
+  --cell-given: #eceef0;
+  --cell-user: #9cc0ff;
+  --cell-selected: #46505c;
+  --cell-related: #272b30;
+  --cell-same: #39414b;
+  --note: #b5bbc3;
+  --error: #ff8a80;
+  --error-bg: #4a2523;
+  --success: #7fd19b;
+  --focus: #9cc0ff;
+  --shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+}
