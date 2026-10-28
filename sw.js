@@ -25,6 +25,7 @@ const PRECACHE = [
   "src/engine/bank.js",
   "src/engine/board.js",
   "src/engine/core.js",
+  "src/engine/daily-v1-bank.js",
   "src/engine/generator.js",
   "src/engine/hints.js",
   "src/engine/index.js",
