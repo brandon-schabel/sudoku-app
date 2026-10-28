@@ -16,6 +16,8 @@ const PRECACHE = [
   "index.html",
   "manifest.webmanifest",
   "privacy.html",
+  "src/engine/board.js",
+  "src/engine/core.js",
   "src/game.js",
   "src/main.js",
   "src/storage.js",
