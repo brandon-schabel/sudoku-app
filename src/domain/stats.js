@@ -54,25 +54,25 @@ export function computeStats(records, filter = 'all') {
   return { byDifficulty, recent: filtered.slice(0, 20), total: filtered.length };
 }
 
-/** Compare the latest and previous groups of five at a difficulty/assistance level. */
+/** Compare complete latest and previous groups of five at a difficulty/assistance level. */
 export function trend(records, { difficulty, assisted }) {
   const games = (records ?? [])
     .filter(record => record.difficulty === difficulty && record.assisted === assisted)
     .slice()
     .sort((a, b) => b.completedAt - a.completedAt);
-  if (games.length < 2) return null;
+  if (games.length < 10) return null;
   const summarize = group => ({
     n: group.length,
     avgMs: Math.round(group.reduce((sum, record) => sum + record.elapsedMs, 0) / group.length),
     avgScore: Math.round(group.reduce((sum, record) => sum + record.score, 0) / group.length)
   });
   const latest = summarize(games.slice(0, 5));
-  const previous = games.slice(5, 10).length ? summarize(games.slice(5, 10)) : { n: 0, avgMs: null, avgScore: null };
+  const previous = summarize(games.slice(5, 10));
   return {
     latest,
     previous,
-    deltaMs: previous.n ? latest.avgMs - previous.avgMs : null,
-    deltaScore: previous.n ? latest.avgScore - previous.avgScore : null
+    deltaMs: latest.avgMs - previous.avgMs,
+    deltaScore: latest.avgScore - previous.avgScore
   };
 }
 

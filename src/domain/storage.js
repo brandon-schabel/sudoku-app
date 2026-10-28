@@ -1,6 +1,6 @@
 import { normalizeSettings, DEFAULT_SETTINGS } from './settings.js';
 import { emptyArchive, pruneArchive } from './archive.js';
-import { personalBest } from './stats.js';
+import { createRecord, personalBest } from './stats.js';
 
 /** Persistent data keys. */
 export const STORAGE_KEYS = Object.freeze({
@@ -40,9 +40,11 @@ function isObject(value) {
 function validValue(key, value) {
   if (key === STORAGE_KEYS.settings) return isObject(value);
   if (key === STORAGE_KEYS.archive) {
-    return isObject(value) && isObject(value.entries) && (value.activeId === null || typeof value.activeId === 'string');
+    return isObject(value) && isObject(value.entries)
+      && (value.activeId === null || typeof value.activeId === 'string')
+      && Object.entries(value.entries).every(([id, entry]) => validEntry(id, entry));
   }
-  if (key === STORAGE_KEYS.records) return Array.isArray(value) && value.every(isObject);
+  if (key === STORAGE_KEYS.records) return Array.isArray(value) && value.every(validRecord);
   if (key === STORAGE_KEYS.meta) return isObject(value);
   return true;
 }
@@ -136,24 +138,7 @@ export function migrateLegacy(backend, { now = Date.now } = {}) {
         mistakes: Number.isFinite(game.mistakes) ? game.mistakes : 0
       };
       try {
-        // Legacy completion migration keeps the same record fields as a new completion.
-        const assist = normalizeAssist(recordInput.assist);
-        const assisted = Object.values(assist).some(value => value > 0);
-        const score = Math.max(100, ({ easy: 1000, medium: 2000, hard: 3000, expert: 4000 })[game.difficulty]
-          + Math.round(1200 * Math.max(0, Math.min(1, 1 - recordInput.elapsedMs / ({ easy: 600000, medium: 900000, hard: 1500000, expert: 2400000 })[game.difficulty])))
-          - 100 * assist.hints - 25 * recordInput.mistakes);
-        data.records.push({
-          id,
-          puzzleId: id,
-          difficulty: game.difficulty,
-          dailyKey: game.dailyKey ?? null,
-          completedAt: recordInput.completedAt,
-          elapsedMs: recordInput.elapsedMs,
-          mistakes: recordInput.mistakes,
-          assist,
-          assisted,
-          score
-        });
+        data.records.push(createRecord({ ...recordInput, id }));
         data.meta.completedCount = 1;
       } catch { /* Malformed legacy completion remains archived without a statistics row. */ }
     }
@@ -163,11 +148,6 @@ export function migrateLegacy(backend, { now = Date.now } = {}) {
   }
   data.meta.migratedFrom = 1;
   return data;
-}
-
-function normalizeAssist(value) {
-  const keys = ['hints', 'checks', 'reveals', 'errorsShown', 'autoNotes'];
-  return Object.fromEntries(keys.map(key => [key, Number.isFinite(value?.[key]) ? Math.max(0, Math.floor(value[key])) : 0]));
 }
 
 /** Create a synchronous versioned data store. `now` makes first-install metadata deterministic. */
@@ -190,7 +170,6 @@ export function createStore(backend, { now = Date.now } = {}) {
     data.records = readKey(backend, STORAGE_KEYS.records, data.records, installedAt);
     const storedMeta = readKey(backend, STORAGE_KEYS.meta, null, installedAt);
     if (storedMeta) data.meta = { ...data.meta, ...storedMeta };
-    if (data.meta.migratedFrom === 1) data.meta.migratedFrom = 1;
     if (!hasKey(backend, STORAGE_KEYS.meta)) writeKey(backend, STORAGE_KEYS.meta, data.meta);
     return clone(data);
   };
@@ -211,8 +190,14 @@ export function exportData(appData) {
 
 function validRecord(record) {
   return isObject(record) && typeof record.id === 'string' && record.id.length > 0
-    && DIFFICULTIES.has(record.difficulty) && Number.isFinite(record.completedAt)
-    && Number.isFinite(record.elapsedMs) && Number.isFinite(record.score);
+    && typeof record.puzzleId === 'string' && record.puzzleId.length > 0
+    && DIFFICULTIES.has(record.difficulty)
+    && (record.dailyKey === null || typeof record.dailyKey === 'string')
+    && Number.isFinite(record.completedAt) && Number.isFinite(record.elapsedMs)
+    && record.elapsedMs >= 0 && Number.isFinite(record.mistakes) && record.mistakes >= 0
+    && isObject(record.assist)
+    && ['hints', 'checks', 'reveals', 'errorsShown', 'autoNotes'].every(key => Number.isFinite(record.assist[key]) && record.assist[key] >= 0)
+    && typeof record.assisted === 'boolean' && Number.isFinite(record.score);
 }
 
 function validEntry(id, entry) {
@@ -220,8 +205,9 @@ function validEntry(id, entry) {
     && isObject(entry) && entry.id === id && isObject(entry.game) && entry.game.id === id
     && DIFFICULTIES.has(entry.difficulty) && (entry.kind === 'random' || entry.kind === 'daily')
     && (entry.status === 'active' || entry.status === 'completed')
-    && Array.isArray(entry.recovery ?? [])
-    && (entry.recovery ?? []).every(item => isObject(item) && Number.isFinite(item.savedAt) && isObject(item.game));
+    && Number.isFinite(entry.updatedAt)
+    && Array.isArray(entry.recovery)
+    && entry.recovery.every(item => isObject(item) && Number.isFinite(item.savedAt) && isObject(item.game));
 }
 
 function equivalent(left, right) {
@@ -242,6 +228,7 @@ export function importData(current, text) {
       throw new ImportError('Unsupported or invalid Sudoku export.');
     }
     if (!incoming.records.every(validRecord)) throw new ImportError('Import contains an invalid game record.');
+    // The imported activeId is intentionally ignored; importing never changes the user's active game.
     for (const [id, entry] of Object.entries(incoming.archive.entries)) {
       if (!validEntry(id, entry)) throw new ImportError('Import contains an invalid archive entry.');
     }

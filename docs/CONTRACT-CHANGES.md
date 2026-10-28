@@ -6,3 +6,4 @@
 - `dailyCalendar(records, archive, year, month, now = Date.now())` accepts an optional millisecond timestamp for deterministic future-day classification. Existing four-argument calls remain valid.
 - `trend` returns null deltas when there is no previous window; when there are 1–4 earlier matching games, it compares against those available games and reports their actual count in `previous.n`.
 - Empty difficulty buckets in `computeStats` use `avgMs: null`, matching `bestMs` and `bestScore` nullability. Unknown stats filters default to `all`.
+- `trend` requires two complete five-game windows before returning a comparison (`null` with fewer than 10 matching games), matching the B2 acceptance criteria in ROADMAP §4. This supersedes the earlier partial-window behavior above.

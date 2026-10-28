@@ -88,15 +88,13 @@ test('statistics values, filters, recent cap, trends and strict personal best ti
   assert.equal(computeStats(records, 'unexpected').total, 12);
   assert.equal(computeStats(Array.from({ length: 25 }, (_, i) => rec(`recent${i}`, i))).recent.length, 20);
 
-  const trendResult = trend(records, { difficulty: 'easy', assisted: true });
-  assert.deepEqual(trendResult.latest, { n: 5, avgMs: 1940, avgScore: 106 });
-  assert.deepEqual(trendResult.previous, { n: 1, avgMs: 2000, avgScore: 100 });
-  assert.equal(trendResult.deltaMs, -60);
-  assert.equal(trendResult.deltaScore, 6);
-  const noPrevious = trend(records.slice(0, 4), { difficulty: 'easy', assisted: false });
-  assert.equal(noPrevious.previous.n, 0);
-  assert.equal(noPrevious.deltaMs, null);
-  assert.equal(noPrevious.deltaScore, null);
+  const trendRecords = Array.from({ length: 10 }, (_, i) => rec(`trend${i}`, i, 'easy', true, 2000 - i * 10, 100 + i));
+  const trendResult = trend(trendRecords, { difficulty: 'easy', assisted: true });
+  assert.deepEqual(trendResult.latest, { n: 5, avgMs: 1930, avgScore: 107 });
+  assert.deepEqual(trendResult.previous, { n: 5, avgMs: 1980, avgScore: 102 });
+  assert.equal(trendResult.deltaMs, -50);
+  assert.equal(trendResult.deltaScore, 5);
+  assert.equal(trend(trendRecords.slice(0, 9), { difficulty: 'easy', assisted: true }), null);
   assert.equal(trend([records[0]], { difficulty: 'easy', assisted: true }), null);
 
   const best = rec('best', 20, 'easy', false, 500, 2000);
@@ -128,10 +126,32 @@ test('archive snapshots are isolated, immutable, rate limited and restored with 
   const snapshot = growing.entries.b.recovery[0];
   const restored = restoreRecovery(growing, 'b', snapshot.savedAt, 999999);
   assert.equal(restored.entries.b.game.values[0], snapshot.game.values[0]);
+  assert.equal(restored.entries.b.status, 'active');
+  assert.equal(restored.activeId, 'b');
   assert.equal(restored.entries.b.updatedAt, 999999);
   assert.equal(restored.entries.b.recovery[0].game.values[0], growing.entries.b.game.values[0]);
   assert.equal(restored.entries.b.recovery[0].savedAt, 999999);
   assert.equal(new Set(restored.entries.b.recovery.map(item => item.savedAt)).size, restored.entries.b.recovery.length);
+
+  const completedSnapshot = game('done', 4, { completed: true, completedAt: 4 });
+  const completedEntry = entry('done', 1, {
+    status: 'completed',
+    game: game('done', 5, { completed: true, completedAt: 5 }),
+    recovery: [
+      { savedAt: 4, game: completedSnapshot },
+      { savedAt: 1, game: game('done', 2, { completed: false }) }
+    ]
+  });
+  const completedRestore = restoreRecovery({ activeId: null, entries: { done: completedEntry } }, 'done', 4, 10);
+  assert.equal(completedRestore.entries.done.status, 'completed');
+  assert.equal(completedRestore.entries.done.game.completed, true);
+  assert.equal(completedRestore.activeId, null);
+  assert.equal(listUnfinished(completedRestore).length, 0);
+  const activeRestore = restoreRecovery({ activeId: null, entries: { done: completedEntry } }, 'done', 1, 11);
+  assert.equal(activeRestore.entries.done.status, 'active');
+  assert.equal(activeRestore.entries.done.game.completed, false);
+  assert.equal(activeRestore.activeId, 'done');
+
   assert.throws(() => saveActive(empty, { difficulty: 'easy' }), /id/);
   const completed = saveActive(empty, game('done', 0, { completed: true }), 2);
   assert.equal(completed.activeId, 'done');
@@ -149,6 +169,7 @@ test('archive ordering, completion, duplicate ids, pruning, and input immutabili
   const duplicate = startNew(archive, game('a', 3), 3);
   assert.equal(duplicate.entries.a.game.values[0], 3);
   assert.equal(duplicate.entries.b.game.values[0], 2);
+  assert.deepEqual(listUnfinished(duplicate).map(item => item.id), ['a', 'b']);
   assert.equal(resume(duplicate, 'a').activeId, 'a');
   assert.throws(() => resume(duplicate, 'missing'), /Unknown archive entry/);
   assert.throws(() => markCompleted(duplicate, 'missing'), /Unknown archive entry/);
@@ -240,10 +261,30 @@ test('legacy migration is idempotent, upgrades ids, preserves sources and maps t
   }
 
   const completedBackend = new MemoryBackend();
-  completedBackend.setItem('sudoku-app:game', JSON.stringify({ version: 1, savedAt: 20, game: { ...game(undefined, 0, { completed: true }), id: undefined, completedAt: 15 } }));
+  completedBackend.setItem('sudoku-app:game', JSON.stringify({ version: 1, savedAt: 20, game: { ...game(undefined, 0, { completed: true, elapsedMs: 450000 }), id: undefined, completedAt: 15 } }));
   const migratedCompleted = createStore(completedBackend, { now: () => 100 }).load();
   assert.equal(migratedCompleted.records.length, 1);
   assert.equal(migratedCompleted.records[0].id, 'legacy-20');
+  assert.equal(migratedCompleted.records[0].score, computeScore({
+    difficulty: 'easy', elapsedMs: 450000, hints: 0, mistakes: 0
+  }));
+});
+
+test('loading malformed archive elements and records preserves corrupt values and defaults safely', () => {
+  const invalidValues = [
+    [STORAGE_KEYS.archive, JSON.stringify({ activeId: 'bad', entries: { bad: null } })],
+    [STORAGE_KEYS.records, JSON.stringify([{ ...rec('invalid', 1), assisted: 'yes' }])]
+  ];
+  for (const [key, raw] of invalidValues) {
+    const backend = new MemoryBackend();
+    backend.setItem(key, raw);
+    const loaded = createStore(backend, { now: () => 56 }).load();
+    assert.doesNotThrow(() => createStore(backend).load());
+    assert.equal(backend.getItem(key), raw);
+    assert.deepEqual(loaded[key === STORAGE_KEYS.archive ? 'archive' : 'records'],
+      key === STORAGE_KEYS.archive ? emptyArchive() : []);
+    assert.ok([...backend.data.keys()].some(storedKey => storedKey.startsWith(`sudoku:v2:corrupt:${key}:`)));
+  }
 });
 
 test('corrupt JSON and wrong-shaped v2 values are preserved, defaulted and deduplicated', () => {
@@ -349,6 +390,8 @@ test('import rejects malformed shapes and hostile ids, normalizes setting confli
   const importEnvelope = data => JSON.stringify({ format: 'sudoku-app-export', version: 2, data });
   const malformedRecord = appData({ records: [null] });
   assert.throws(() => importData(current, importEnvelope(malformedRecord)), ImportError);
+  const invalidAssisted = appData({ records: [{ ...rec('bad-assisted', 1), assisted: 1 }] });
+  assert.throws(() => importData(current, importEnvelope(invalidAssisted)), ImportError);
   const malformedEntry = appData();
   malformedEntry.archive.entries.x = null;
   assert.throws(() => importData(current, importEnvelope(malformedEntry)), ImportError);

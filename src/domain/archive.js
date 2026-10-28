@@ -104,10 +104,16 @@ export function restoreRecovery(archive, id, savedAt, now = Date.now()) {
   ].slice(0, 3);
   return {
     ...archive,
-    activeId: id,
+    activeId: snapshot.game.completed ? null : id,
     entries: {
       ...archive.entries,
-      [id]: { ...entry, game: clone(snapshot.game), updatedAt: now, recovery }
+      [id]: {
+        ...entry,
+        status: snapshot.game.completed ? 'completed' : 'active',
+        game: clone(snapshot.game),
+        updatedAt: now,
+        recovery
+      }
     }
   };
 }
