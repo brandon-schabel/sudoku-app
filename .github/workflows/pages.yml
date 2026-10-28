@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  test:
+    if: github.repository == 'brandon-schabel/sudoku-app'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: node --test
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pages-e2e-report
+          path: playwright-report
+          if-no-files-found: ignore
+  deploy:
+    if: github.repository == 'brandon-schabel/sudoku-app'
+    needs: test
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage allowlisted static site
+        run: |
+          mkdir -p _site/src _site/assets _site/styles
+          cp index.html styles.css manifest.webmanifest sw.js privacy.html .nojekyll _site/
+          cp -R src _site/
+          cp -R assets _site/
+          cp -R styles _site/
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

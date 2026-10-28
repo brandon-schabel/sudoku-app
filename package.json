@@ -2,5 +2,28 @@
   "name": "sudoku-app",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test" }
+  "scripts": {
+    "test": "node --test",
+    "build:www": "node scripts/build-www.mjs",
+    "cap:sync": "node scripts/build-www.mjs && cap sync",
+    "android:debug": "node scripts/build-www.mjs && cap sync android && cd android && ./gradlew assembleDebug",
+    "android:release": "node scripts/build-www.mjs && cap sync android && cd android && ./gradlew bundleRelease assembleRelease",
+    "icons": "node scripts/make-icons.mjs && capacitor-assets generate --ios --android --iconBackgroundColor \"#2b2f36\" --splashBackgroundColor \"#f4f2ee\" --splashBackgroundColorDark \"#23262c\"",
+    "test:e2e": "playwright test",
+    "screenshots": "node scripts/screenshots.mjs",
+    "screenshots:e2e": "SCREENSHOT_DIR=test-results/screenshots playwright test"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@capacitor-community/in-app-review": "^7.1.0",
+    "@capacitor/android": "^7.6.9",
+    "@capacitor/app": "^7.1.2",
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^7.6.9",
+    "@capacitor/core": "^7.6.9",
+    "@capacitor/haptics": "^7.0.5",
+    "@capacitor/ios": "^7.6.9",
+    "@playwright/test": "^1.56.1",
+    "@resvg/resvg-js": "^2.6.2"
+  }
 }

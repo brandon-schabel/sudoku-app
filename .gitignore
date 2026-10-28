@@ -2,3 +2,10 @@ node_modules/
 .DS_Store
 *.log
 opencode.json
+www/
+store/screenshots/
+test-results/
+playwright-report/
+*.keystore
+*.jks
+keystore.properties
