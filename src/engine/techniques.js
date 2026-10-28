@@ -269,6 +269,7 @@ export function* techniqueSteps(board, c, technique) {
 }
 /** Return the first deduction in the documented simplest-first strategy. */
 export function findNextStep(board, candidates = computeCandidates(board)) {
+  candidates ??= computeCandidates(board);
   for (const technique of Object.keys(TECHNIQUES)) {
     const step = techniqueSteps(board, candidates, technique).next().value;
     if (step) return step;

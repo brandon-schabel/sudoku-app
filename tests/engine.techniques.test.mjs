@@ -85,8 +85,23 @@ test("column X-wing and row skyscraper remove exactly the published candidates",
   }
 });
 test("focused hints exhaust only equal-or-lower-rank eliminations and remain correct", () => {
-  for (const id of ["bf201", "bf301", "xy01", "xyz01", "sk01"]) {
-    const board = [...PUBLISHED_FIXTURES[id].puzzle].map(Number),
+  const fixtures = [
+    ...[
+      "bf201",
+      "bf301",
+      "bf302",
+      "xy01",
+      "xyz01",
+      "xyz02",
+      "sk01",
+      "lc201",
+      "h301",
+      "h302",
+    ].map((id) => ({ id, ...PUBLISHED_FIXTURES[id] })),
+    ...HINT_FIXTURES.filter((f) => f.technique === "naked-triple"),
+  ];
+  for (const { id, puzzle } of fixtures) {
+    const board = [...puzzle].map(Number),
       solution = solve(board),
       plain = getHint(board, [], solution),
       rank = TECHNIQUES[plain.technique].rank;

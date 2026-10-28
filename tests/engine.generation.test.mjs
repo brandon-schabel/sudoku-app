@@ -14,12 +14,15 @@ import {
   DAILY_VERSION,
 } from "../src/engine/index.js";
 import { PUZZLE_BANK } from "../src/engine/bank.js";
+import {
+  diversityFingerprint,
+  DIVERSITY_FLOORS,
+} from "../src/engine/tools/bank-diversity.js";
+import { statSync } from "node:fs";
 
 test("all bank sources are unique, independently solvable and graded at their declared tier", () => {
-  assert.ok(PUZZLE_BANK.hard.length >= 60);
-  assert.ok(PUZZLE_BANK.expert.length >= 60);
   for (const difficulty of DIFFICULTIES) {
-    assert.ok(PUZZLE_BANK[difficulty].length >= 5);
+    assert.ok(PUZZLE_BANK[difficulty].length >= 384);
     const seen = new Set();
     for (const fixture of PUZZLE_BANK[difficulty]) {
       assert.ok(!seen.has(fixture.puzzle));
@@ -38,6 +41,70 @@ test("all bank sources are unique, independently solvable and graded at their de
     }
   }
 });
+test("bank has a required-technique diversity floor and 384 certified non-isomorphic sources per tier", () => {
+  assert.ok(
+    statSync(new URL("../src/engine/bank.js", import.meta.url)).size < 600_000,
+  );
+  for (const difficulty of DIFFICULTIES) {
+    const sources = PUZZLE_BANK[difficulty];
+    const fingerprints = new Set(
+      sources.map((p) => diversityFingerprint([...p.puzzle].map(Number))),
+    );
+    assert.equal(
+      fingerprints.size,
+      sources.length,
+      "different invariants certify non-isomorphic sources",
+    );
+    const independentGrids = sources
+      .filter((p) => typeof p.seed === "number")
+      .map((p) => p.seed);
+    assert.ok(
+      new Set(independentGrids).size >= 320,
+      "at least 320 independent solved-grid seeds per tier",
+    );
+    const hardest = sources.map((p) => grade([...p.puzzle].map(Number)).hardest);
+    for (const [technique, floor] of Object.entries(
+      DIVERSITY_FLOORS[difficulty] ?? {},
+    ))
+      assert.ok(
+        hardest.filter((id) => id === technique).length >= floor,
+        `${difficulty}: at least ${floor} sources requiring ${technique}`,
+      );
+  }
+});
+test("diversity certificate is invariant to Sudoku symmetries", () => {
+  const board = [...PUZZLE_BANK.expert[0].puzzle].map(Number),
+    expected = diversityFingerprint(board);
+  const rows = [4, 5, 3, 8, 6, 7, 1, 0, 2],
+    cols = [7, 8, 6, 0, 2, 1, 5, 3, 4];
+  for (const transpose of [false, true]) {
+    const moved = Array.from({ length: 81 }, (_, i) => {
+      const r = rows[Math.floor(i / 9)],
+        c = cols[i % 9];
+      const value = board[transpose ? c * 9 + r : r * 9 + c];
+      return value ? 10 - value : 0;
+    });
+    assert.equal(diversityFingerprint(moved), expected);
+  }
+});
+for (const difficulty of ["hard", "expert"])
+  test(`${difficulty} default path produces fresh non-isomorphic puzzles outside the bank`, () => {
+    const bank = new Set(
+      PUZZLE_BANK[difficulty].map((p) =>
+        diversityFingerprint([...p.puzzle].map(Number)),
+      ),
+    );
+    const fresh = new Set();
+    for (let seed = 0; seed < 50; seed++) {
+      const generated = generatePuzzle(difficulty, { seed: `fresh:${seed}` });
+      const fingerprint = diversityFingerprint(generated.puzzle);
+      if (!bank.has(fingerprint)) fresh.add(fingerprint);
+    }
+    assert.ok(
+      fresh.size >= (difficulty === "hard" ? 30 : 5),
+      `${fresh.size} fresh structures`,
+    );
+  });
 for (const difficulty of DIFFICULTIES)
   test(`50 seeded ${difficulty} puzzles: exact grade, unique solution, deterministic and timely`, () => {
     const times = [],
@@ -66,18 +133,24 @@ for (const difficulty of DIFFICULTIES)
           assert.equal(result.puzzle[i], result.solution[i]);
     }
     times.sort((a, b) => a - b);
-    // Allow CI contention while preserving the intended order-of-magnitude budget.
     const budget = { easy: 300, medium: 300, hard: 1000, expert: 3000 }[
       difficulty
     ];
     assert.ok(
-      times[47] < budget * 2,
-      `p95 ${times[47]}ms exceeds loose ${budget * 2}ms budget`,
+      times[47] < budget,
+      `p95 ${times[47]}ms exceeds ${budget}ms budget`,
     );
   });
-test("seeded generation never consults time or Math.random", () => {
+test("default seeded generation never consults time, Math.random or unseeded entropy", () => {
   const now = Date.now,
-    random = Math.random;
+    random = Math.random,
+    cryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto");
+  const expected = Object.fromEntries(
+    DIFFICULTIES.map((difficulty) => [
+      difficulty,
+      generatePuzzle(difficulty, { seed: "clockless" }),
+    ]),
+  );
   try {
     Date.now = () => {
       throw Error("clock used");
@@ -85,15 +158,74 @@ test("seeded generation never consults time or Math.random", () => {
     Math.random = () => {
       throw Error("global random used");
     };
-    for (const difficulty of DIFFICULTIES)
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        getRandomValues() {
+          throw Error("unseeded entropy used");
+        },
+      },
+    });
+    for (const difficulty of DIFFICULTIES) {
+      assert.deepEqual(
+        generatePuzzle(difficulty, { seed: "clockless" }),
+        expected[difficulty],
+      );
       assert.equal(
         generatePuzzle(difficulty, { seed: "clockless", maxAttempts: 0 }).grade
           .difficulty,
         difficulty,
       );
+    }
+    assert.equal(dailyPuzzle("2026-10-27").grade.difficulty, "medium");
   } finally {
     Date.now = now;
     Math.random = random;
+    if (cryptoDescriptor)
+      Object.defineProperty(globalThis, "crypto", cryptoDescriptor);
+    else delete globalThis.crypto;
+  }
+});
+test("seeded results are invariant to calls through both unseeded entropy paths", () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "crypto"),
+    now = Date.now;
+  const expected = DIFFICULTIES.map((d) =>
+    generatePuzzle(d, { seed: "entropy-independent" }),
+  );
+  try {
+    let entropy = 100;
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: {
+        getRandomValues(values) {
+          values[0] = entropy++;
+          return values;
+        },
+      },
+    });
+    for (let i = 0; i < DIFFICULTIES.length; i++) {
+      assert.equal(generatePuzzle(DIFFICULTIES[i]).seed, String(100 + i));
+      assert.deepEqual(
+        generatePuzzle(DIFFICULTIES[i], { seed: "entropy-independent" }),
+        expected[i],
+      );
+    }
+    Object.defineProperty(globalThis, "crypto", {
+      configurable: true,
+      value: undefined,
+    });
+    Date.now = () => entropy++;
+    for (let i = 0; i < DIFFICULTIES.length; i++) {
+      assert.equal(generatePuzzle(DIFFICULTIES[i]).seed, String(104 + i));
+      assert.deepEqual(
+        generatePuzzle(DIFFICULTIES[i], { seed: "entropy-independent" }),
+        expected[i],
+      );
+    }
+  } finally {
+    Date.now = now;
+    if (descriptor) Object.defineProperty(globalThis, "crypto", descriptor);
+    else delete globalThis.crypto;
   }
 });
 test("RNG numeric mulberry32 and string xmur3 vectors are stable", () => {
@@ -112,6 +244,7 @@ test("RNG numeric mulberry32 and string xmur3 vectors are stable", () => {
 });
 test("daily UTC boundaries, immutable namespace and three literal snapshots", () => {
   assert.equal(DAILY_VERSION, 1);
+  assert.throws(() => dailyKey(new Date(NaN)), RangeError);
   assert.equal(dailyKey(new Date("2026-10-27T23:30:00-07:00")), "2026-10-28");
   assert.equal(dailyKey(new Date("2026-10-27T01:00:00+03:00")), "2026-10-26");
   const snapshots = {
@@ -130,8 +263,36 @@ test("daily UTC boundaries, immutable namespace and three literal snapshots", ()
     assert.equal(g.grade.difficulty, "medium");
     assert.equal(countSolutions(g.puzzle), 1);
   }
+  // Captured from the pre-expansion generator (205549d); even rare v1 fallback
+  // seeds must keep their original puzzles as the random-play bank grows.
+  assert.equal(
+    generatePuzzle("medium", {
+      seed: "daily:1:2026-10-27",
+      maxAttempts: 0,
+    }).puzzle.join(""),
+    "000020000000504600000300027070001806350740009009850004760000408080000062400600500",
+  );
   for (const bad of ["2026-02-29", "2026-13-01", "2026-2-01", "nonsense"])
     assert.throws(() => dailyPuzzle(bad), RangeError);
+});
+test("maxAttempts documented normalization is deterministic", () => {
+  for (const maxAttempts of [NaN, Infinity, -Infinity, "2", null])
+    assert.deepEqual(
+      generatePuzzle("hard", { seed: "attempts", maxAttempts }),
+      generatePuzzle("hard", { seed: "attempts", maxAttempts: 6 }),
+    );
+  assert.deepEqual(
+    generatePuzzle("hard", { seed: "attempts", maxAttempts: -1 }),
+    generatePuzzle("hard", { seed: "attempts", maxAttempts: 0 }),
+  );
+  assert.deepEqual(
+    generatePuzzle("hard", { seed: "attempts", maxAttempts: 1.9 }),
+    generatePuzzle("hard", { seed: "attempts", maxAttempts: 1 }),
+  );
+  assert.deepEqual(
+    generatePuzzle("expert", { seed: "attempts", maxAttempts: 101 }),
+    generatePuzzle("expert", { seed: "attempts", maxAttempts: 100 }),
+  );
 });
 test("async Node fallback equals sync generation; invalid difficulty rejects", async () => {
   for (const difficulty of DIFFICULTIES)
