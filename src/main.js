@@ -1,527 +1,606 @@
-import { Game } from "./game.js";
-import { DIFFICULTIES, findConflicts } from "./sudoku.js";
-import {
-  loadGame,
-  loadSettings,
-  saveGame,
-  saveSettings
-} from "./storage.js";
-import { createUI, formatTime } from "./ui.js";
+/**
+ * Bootstrap: wires the controller (game + domain data) to the gameplay views,
+ * builds the `app` facade for the menu/win/onboarding modules
+ * (docs/UI-CONTRACT.md), applies settings to <html>, handles input, autosave,
+ * app-state changes and the `?test=1` hooks (ROADMAP §2.5).
+ */
+import { getHint } from "./engine/index.js";
+import * as platform from "./platform/index.js";
+import { createController } from "./ui/controller.js";
+import { createBoard } from "./ui/board.js";
+import { createPad } from "./ui/pad.js";
+import { createToolbar } from "./ui/toolbar.js";
+import { createStatus } from "./ui/status.js";
+import { createHintPanel } from "./ui/hint-panel.js";
+import { createConfirm } from "./ui/confirm.js";
+import { keyToCommand, moveIndex } from "./ui/keys.js";
+import { boardView, htmlAttributes, newlyShownErrors, padView } from "./ui/view-model.js";
+import { createMenu } from "./ui/menu/index.js";
+import { createWinDialog } from "./ui/win.js";
+import { createOnboarding } from "./ui/onboarding.js";
 
-const THEME_ORDER = ["auto", "light", "dark"];
-const root = document.getElementById("app");
+/** Hidden longer than this → come back to the pause menu (brief switches never pause). */
+const HIDDEN_PAUSE_MS = 10_000;
+const AUTOSAVE_MS = 5_000;
 
-const mediaQuery =
-  typeof window.matchMedia === "function"
-    ? window.matchMedia("(prefers-color-scheme: dark)")
-    : { matches: false, addEventListener: null, addListener: null };
+const $ = (id) => document.getElementById(id);
+const html = document.documentElement;
+const params = new URLSearchParams(location.search);
 
-const settings = loadSettings();
-let theme = settings.theme;
-let selectedDifficulty = "easy";
-let selectedIndex = 0;
-let noteMode = false;
-let game = null;
-let ui = null;
-let timerId = null;
-let lastSavedAt = 0;
-let pauseMenuOpen = false;
-
-function firstEmptyIndex(state) {
-  const index = state.values.findIndex((value) => value === 0);
-  return index === -1 ? 0 : index;
-}
-
-function resolvedTheme() {
-  return theme === "auto" ? (mediaQuery.matches ? "dark" : "light") : theme;
-}
-
-function applyTheme() {
-  document.documentElement.dataset.theme = resolvedTheme();
-}
-
-function nextTheme(value) {
-  const index = THEME_ORDER.indexOf(value);
-  return THEME_ORDER[(index < 0 ? 0 : index + 1) % THEME_ORDER.length];
-}
-
-function isPaused() {
-  return !game.state.running && !game.state.completed;
-}
-
-function render() {
-  const state = game.state;
-  ui.render(state, {
-    selectedIndex,
-    noteMode,
-    conflicts: findConflicts(state.values),
-    paused: isPaused(),
-    theme,
-    selectedDifficulty
-  });
-}
-
-function save() {
-  saveGame(game.toJSON());
-  lastSavedAt = Date.now();
-}
-
-function closePauseMenu({ resume = true } = {}) {
-  if (!pauseMenuOpen) return;
-  pauseMenuOpen = false;
-  ui.closePauseMenu();
-  if (resume && !game.state.completed) game.resume();
-  save();
-  render();
-  if (resume) ui.announce("Timer resumed.");
-}
-
-function openPauseMenu() {
-  if (!game || game.state.completed || ui.isModalOpen()) return;
-  if (game.state.running) game.pause();
-  pauseMenuOpen = true;
-  save();
-  render();
-  ui.openPauseMenu({
-    difficulty: selectedDifficulty,
-    theme,
-    hasProgress: hasProgress()
-  });
-  ui.announce("Game paused.");
-}
-
-function handleEvent() {
-  const event = game.state.lastEvent;
-  if (!event) return false;
-  game.state.lastEvent = null;
-
-  if (pauseMenuOpen) {
-    pauseMenuOpen = false;
-    ui.closePauseMenu({ restoreFocus: false });
-  }
-
-  if (event === "gameover") {
-    ui.showModal("gameover", { mistakes: game.state.mistakes });
-    ui.announce(
-      "Game over. Three mistakes reached. Choose New game or Keep playing."
-    );
-    return true;
-  }
-
-  if (event === "win") {
-    const state = game.state;
-    ui.showModal("win", {
-      time: formatTime(state.elapsedMs),
-      difficulty: state.difficulty,
-      mistakes: state.mistakes,
-      hints: state.hints
-    });
-    ui.announce(
-      `You solved the puzzle in ${formatTime(state.elapsedMs)} with ${
-        state.mistakes
-      } mistakes and ${state.hints} hints.`
-    );
-    return true;
-  }
-
-  return false;
-}
-
-function commit() {
-  save();
-  render();
-  handleEvent();
-}
-
-function hasProgress() {
-  const state = game.state;
-  return (
-    !state.completed &&
-    (state.history.actions.length > 0 ||
-      state.mistakes > 0 ||
-      state.hints > 0 ||
-      state.elapsedMs > 1500)
-  );
-}
-
-function startNewGame(force) {
-  if (!force && hasProgress()) {
-    const confirmed = window.confirm(
-      "A game is in progress. Start a new game? Your current progress will be lost."
-    );
-    if (!confirmed) return;
-  }
-
-  let nextGame;
+/** localStorage, or an in-memory stand-in when storage is blocked. */
+function storageBackend() {
   try {
-    nextGame = Game.create(selectedDifficulty);
+    const probe = "sudoku:probe";
+    localStorage.setItem(probe, "1");
+    localStorage.removeItem(probe);
+    return localStorage;
   } catch {
-    ui.announce("Could not create a new puzzle. Please try again.");
-    return;
-  }
-
-  game = nextGame;
-  selectedIndex = firstEmptyIndex(game.state);
-  noteMode = false;
-  pauseMenuOpen = false;
-  ui.closePauseMenu({ restoreFocus: false });
-  ui.closeModal();
-  save();
-  render();
-  ui.focusCell(selectedIndex);
-  ui.announce(`New ${selectedDifficulty} game started.`);
-}
-
-function moveSelection(key) {
-  const current = Number.isInteger(selectedIndex) ? selectedIndex : 0;
-  let row = Math.floor(current / 9);
-  let col = current % 9;
-
-  if (key === "ArrowUp") row = Math.max(0, row - 1);
-  else if (key === "ArrowDown") row = Math.min(8, row + 1);
-  else if (key === "ArrowLeft") col = Math.max(0, col - 1);
-  else if (key === "ArrowRight") col = Math.min(8, col + 1);
-  else return;
-
-  const next = row * 9 + col;
-  if (next === selectedIndex) return;
-  selectedIndex = next;
-  render();
-  ui.focusCell(next);
-}
-
-function dispatch(intent) {
-  if (!intent || !game) return;
-  const state = game.state;
-
-  switch (intent.type) {
-    case "select": {
-      if (
-        !Number.isInteger(intent.index) ||
-        intent.index < 0 ||
-        intent.index >= 81
-      ) {
-        return;
-      }
-      selectedIndex = intent.index;
-      render();
-      return;
-    }
-
-    case "digit": {
-      if (isPaused() || state.completed) return;
-      if (!Number.isInteger(intent.digit) || intent.digit < 1 || intent.digit > 9) {
-        return;
-      }
-      if (noteMode) game.toggleNote(selectedIndex, intent.digit);
-      else game.enterDigit(selectedIndex, intent.digit);
-      commit();
-      return;
-    }
-
-    case "erase": {
-      if (isPaused() || state.completed) return;
-      if (game.erase(selectedIndex)) commit();
-      else render();
-      return;
-    }
-
-    case "notes-toggle": {
-      noteMode = !noteMode;
-      render();
-      ui.announce(noteMode ? "Notes mode on." : "Notes mode off.");
-      return;
-    }
-
-    case "undo": {
-      if (isPaused() || state.completed) return;
-      if (game.undo()) {
-        commit();
-        ui.announce("Move undone.");
-      } else {
-        render();
-      }
-      return;
-    }
-
-    case "redo": {
-      if (isPaused() || state.completed) return;
-      if (game.redo()) {
-        commit();
-        ui.announce("Move redone.");
-      } else {
-        render();
-      }
-      return;
-    }
-
-    case "hint": {
-      if (isPaused() || state.completed) return;
-      const target = game.hint(selectedIndex);
-      if (target === null) return;
-      selectedIndex = target;
-      save();
-      render();
-      if (!handleEvent()) {
-        const row = Math.floor(target / 9) + 1;
-        const col = (target % 9) + 1;
-        ui.announce(`Hint placed in row ${row}, column ${col}.`);
-      }
-      return;
-    }
-
-    case "pause": {
-      if (state.completed) return;
-      if (pauseMenuOpen) closePauseMenu({ resume: true });
-      else openPauseMenu();
-      return;
-    }
-
-    case "resume": {
-      closePauseMenu({ resume: true });
-      return;
-    }
-
-    case "new-game": {
-      startNewGame(Boolean(intent.force));
-      return;
-    }
-
-    case "modal-new-game": {
-      startNewGame(true);
-      return;
-    }
-
-    case "restart": {
-      if (!intent.force && hasProgress()) return;
-      game.restart();
-      selectedIndex = firstEmptyIndex(game.state);
-      noteMode = false;
-      if (pauseMenuOpen) {
-        pauseMenuOpen = false;
-        ui.closePauseMenu({ restoreFocus: false });
-      }
-      save();
-      render();
-      ui.focusCell(selectedIndex);
-      ui.announce("Puzzle restarted.");
-      return;
-    }
-
-    case "difficulty": {
-      if (Object.prototype.hasOwnProperty.call(DIFFICULTIES, intent.difficulty)) {
-        selectedDifficulty = intent.difficulty;
-        ui.setDifficulty(selectedDifficulty);
-        render();
-        ui.announce(`Difficulty set to ${selectedDifficulty}.`);
-      }
-      return;
-    }
-
-    case "theme": {
-      theme = THEME_ORDER.includes(intent.theme)
-        ? intent.theme
-        : nextTheme(theme);
-      saveSettings({ theme });
-      applyTheme();
-      render();
-      ui.announce(`Theme set to ${theme}.`);
-      return;
-    }
-
-    case "close-modal": {
-      ui.closeModal();
-      return;
-    }
-
-    default:
-      return;
+    const map = new Map();
+    return {
+      getItem: (k) => (map.has(k) ? map.get(k) : null),
+      setItem: (k, v) => void map.set(k, String(v)),
+      removeItem: (k) => void map.delete(k)
+    };
   }
 }
 
-function isTextEntry(target) {
-  if (!target) return false;
-  const tag = target.tagName;
-  return (
-    tag === "INPUT" ||
-    tag === "TEXTAREA" ||
-    tag === "SELECT" ||
-    target.isContentEditable === true
-  );
+const ctl = createController({ backend: storageBackend(), platform });
+
+/** Transient UI state (not persisted). */
+const ui = {
+  notesMode: false,
+  /** number-first: the digit being placed */
+  selectedDigit: null,
+  /** @type {{hint:any, step:number, open:boolean}|null} */
+  hint: null,
+  /** cells marked by Check → value at the time (cleared when the cell changes) */
+  flagged: new Map(),
+  /** wrong entries already counted as shown ("index:digit") */
+  seenErrors: new Set(),
+  gameId: null
+};
+
+// ---- settings → <html> ------------------------------------------------------
+
+const media = {
+  dark: window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null,
+  motion: window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null
+};
+
+function applySettings() {
+  const a = htmlAttributes(ctl.settings(), {
+    prefersDark: Boolean(media.dark && media.dark.matches),
+    prefersReducedMotion: Boolean(media.motion && media.motion.matches)
+  });
+  html.dataset.theme = a.theme;
+  html.dataset.mode = a.mode;
+  html.dataset.text = a.text;
+  html.dataset.motion = a.motion;
+  if (a.cb) html.dataset.cb = a.cb;
+  else delete html.dataset.cb;
+  html.dataset.input = ctl.settings().inputMode;
+  // Keep the browser chrome in step with a forced light/dark choice.
+  const bg = getComputedStyle(html).getPropertyValue("--bg").trim();
+  if (bg) for (const meta of document.querySelectorAll('meta[name="theme-color"]')) meta.setAttribute("content", bg);
 }
+for (const mq of [media.dark, media.motion]) mq?.addEventListener?.("change", applySettings);
 
-function handleKeydown(event) {
-  if (event.defaultPrevented) return;
-  if (ui.isModalOpen()) return;
-  if (isTextEntry(event.target)) return;
+// ---- views ------------------------------------------------------------------
 
-  if (pauseMenuOpen) {
-    const pauseKey = event.key.toLowerCase();
-    if (event.key === "Escape") {
-      event.preventDefault();
-      dispatch({ type: "resume" });
-      return;
-    }
-    if (pauseKey === "p") {
-      event.preventDefault();
-      dispatch({ type: "resume" });
-      return;
-    }
-    if (event.key === " " || event.key === "Spacebar") {
-      const target = event.target;
-      const interactive = target && target.closest
-        ? target.closest("button, summary")
-        : null;
-      if (interactive) return;
-      event.preventDefault();
-      dispatch({ type: "resume" });
-      return;
-    }
-    return;
-  }
-
-  const modifier = event.metaKey || event.ctrlKey;
-  const key = event.key;
-
-  if (modifier) {
-    const lower = key.toLowerCase();
-    if (lower === "z" && !event.altKey) {
-      event.preventDefault();
-      dispatch({ type: event.shiftKey ? "redo" : "undo" });
-      return;
-    }
-    if (lower === "y" && !event.altKey) {
-      event.preventDefault();
-      dispatch({ type: "redo" });
-      return;
-    }
-    return;
-  }
-
-  if (event.altKey) return;
-
-  if (key === "Escape") {
-    event.preventDefault();
-    dispatch({ type: "pause" });
-    return;
-  }
-
-  if (/^[1-9]$/.test(key)) {
-    event.preventDefault();
-    dispatch({ type: "digit", digit: Number(key) });
-    return;
-  }
-
-  if (key === "Backspace" || key === "Delete" || key === "0") {
-    event.preventDefault();
-    dispatch({ type: "erase" });
-    return;
-  }
-
-  if (key.startsWith("Arrow")) {
-    event.preventDefault();
-    moveSelection(key);
-    return;
-  }
-
-  if (key === " " || key === "Spacebar") {
-    const target = event.target;
-    if (
-      target &&
-      target.tagName === "BUTTON" &&
-      !target.classList.contains("cell")
-    ) {
-      return;
-    }
-    event.preventDefault();
-    dispatch({ type: "pause" });
-    return;
-  }
-
-  const lower = key.toLowerCase();
-  if (lower === "n") {
-    event.preventDefault();
-    dispatch({ type: "notes-toggle" });
-  } else if (lower === "e") {
-    event.preventDefault();
-    dispatch({ type: "erase" });
-  } else if (lower === "h") {
-    event.preventDefault();
-    dispatch({ type: "hint" });
-  } else if (lower === "p") {
-    event.preventDefault();
-    dispatch({ type: "pause" });
-  } else if (lower === "m") {
-    event.preventDefault();
-    dispatch({ type: "theme" });
-  }
-}
-
-function startTimerLoop() {
-  if (timerId !== null) return;
-  timerId = window.setInterval(() => {
-    if (!game.state.running) return;
-    game.tick(performance.now());
+const app = buildFacade();
+const confirmDialog = createConfirm($("app"));
+const board = createBoard($("board"), { onCellTap });
+const pad = createPad($("numpad"), { onDigit });
+const toolbar = createToolbar($("tools"), onTool);
+const status = createStatus({ status: $("status"), progress: $("progress") }, { onPause: () => menu.open() });
+const hintPanel = createHintPanel($("hint-panel"), {
+  onStep: hintStep,
+  onFill: hintFill,
+  onTry: () => {
+    if (ui.hint) ui.hint.open = false;
+    hintPanel.hide();
     render();
-    if (Date.now() - lastSavedAt >= 5000) save();
-  }, 250);
+    board.focus();
+  },
+  onClose: closeHint,
+  onReveal: () => {
+    closeHint();
+    if (ctl.actions.revealCell()) afterReveal();
+  }
+});
+const menu = createMenu({
+  root: $("menu-root"),
+  app,
+  onOpen: () => {
+    ctl.hold("menu");
+    $("app").dataset.paused = "true";
+    ctl.save();
+    render();
+  },
+  onClose: () => {
+    ctl.release("menu");
+    delete $("app").dataset.paused;
+    render();
+  }
+});
+const win = createWinDialog({ root: $("win-root"), app });
+const onboarding = createOnboarding({ root: $("onboarding-root"), app });
+
+/** The facade of docs/UI-CONTRACT.md handed to C2 modules. */
+function buildFacade() {
+  const thenClose = (fn) => async (...args) => {
+    const result = await fn(...args);
+    if (menu.isOpen()) menu.close();
+    return result;
+  };
+  return {
+    data: ctl.data,
+    settings: ctl.settings,
+    setSetting: ctl.setSetting,
+    game: ctl.game,
+    actions: {
+      ...ctl.actions,
+      resume: () => (menu.isOpen() ? menu.close() : ctl.release("menu")),
+      newGame: thenClose(ctl.actions.newGame),
+      startDaily: thenClose(ctl.actions.startDaily),
+      continueEntry: thenClose(ctl.actions.continueEntry),
+      restoreRecovery: thenClose(ctl.actions.restoreRecovery),
+      revealCell: () => {
+        const ok = ctl.actions.revealCell();
+        if (ok) afterReveal();
+        return ok;
+      }
+    },
+    on: ctl.on
+  };
 }
 
-function handleVisibilityChange() {
-  if (document.hidden) {
-    if (game.state.running) {
-      game.pause();
-      save();
-      render();
-      ui.announce("Game paused automatically while the tab was hidden.");
-    }
+// ---- rendering ----------------------------------------------------------------
+
+function announce(message) {
+  const node = $("sr-status");
+  node.textContent = "";
+  requestAnimationFrame(() => (node.textContent = message));
+}
+
+let toastTimer = 0;
+function toast(message) {
+  const node = $("toast");
+  node.textContent = message;
+  node.hidden = false;
+  node.dataset.show = "true";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => {
+    delete node.dataset.show;
+    node.hidden = true;
+  }, 2200);
+}
+
+function resetForGame(game) {
+  ui.gameId = game.state.id;
+  ui.hint = null;
+  hintPanel.hide();
+  ui.flagged.clear();
+  ui.seenErrors = new Set();
+  ui.selectedDigit = null;
+  // Wrong entries visible on load were counted when they were first shown.
+  if (ctl.settings().showMistakes) newlyShownErrors(game.state, ui.seenErrors);
+}
+
+function flaggedSet(values) {
+  const set = new Set();
+  for (const [i, v] of ui.flagged) {
+    if (values[i] === v) set.add(i);
+    else ui.flagged.delete(i);
+  }
+  return set;
+}
+
+function render(focusSelected = false) {
+  const game = ctl.current();
+  const loading = ctl.loading();
+  $("app").dataset.ready = game ? "true" : "false";
+  if (!game) return;
+  if (game.state.id !== ui.gameId) resetForGame(game);
+  const s = ctl.settings();
+  const state = game.state;
+  const numberFirst = s.inputMode === "number-first";
+  const remaining = game.remainingCounts();
+  if (numberFirst && ui.selectedDigit && remaining[ui.selectedDigit] === 0 && !ui.notesMode) ui.selectedDigit = null;
+
+  board.render(
+    boardView({
+      state,
+      selected: ctl.selected(),
+      digit: numberFirst ? ui.selectedDigit : null,
+      settings: s,
+      flagged: flaggedSet(state.values),
+      hint: ui.hint ? { hint: ui.hint.hint, step: ui.hint.open ? ui.hint.step : 0 } : null
+    }),
+    focusSelected
+  );
+  pad.render(padView(remaining, { selectedDigit: numberFirst ? ui.selectedDigit : null, notesMode: ui.notesMode }));
+  toolbar.render({
+    canUndo: game.canUndo(),
+    canRedo: game.canRedo(),
+    notes: ui.notesMode,
+    playable: !state.completed && !loading
+  });
+  status.render({ ...state, progress: game.progress() }, s);
+  $("app").dataset.notes = ui.notesMode ? "on" : "off";
+  $("app").dataset.completed = state.completed ? "true" : "false";
+}
+
+// ---- gameplay -----------------------------------------------------------------
+
+function playable() {
+  const game = ctl.current();
+  return game && !game.state.completed && !ctl.loading() ? game : null;
+}
+
+/** Count newly visible mistakes, drop a stale hint, persist and re-render. */
+function afterAction(reason = "action") {
+  const game = ctl.current();
+  if (ui.hint) {
+    ui.hint = null;
+    hintPanel.hide();
+  }
+  if (game && ctl.settings().showMistakes) {
+    const n = newlyShownErrors(game.state, ui.seenErrors);
+    if (n) game.markErrorsShown(n);
+  }
+  ctl.commit(reason);
+}
+
+function afterReveal() {
+  ui.hint = null;
+  hintPanel.hide();
+  render();
+  announce("Cell revealed.");
+}
+
+function applyDigit(index, digit, forceNote = false) {
+  const game = playable();
+  if (!game || game.isGiven(index)) return;
+  const s = ctl.settings();
+  let changed;
+  if (forceNote || ui.notesMode) {
+    changed = game.toggleNote(index, digit);
+    if (changed) ctl.feedback("tap");
+  } else if (game.state.values[index] === digit) {
+    changed = game.erase(index);
+    if (changed) ctl.feedback("tap");
+  } else {
+    changed = game.enterDigit(index, digit, { cleanupNotes: s.cleanupNotes });
+    if (changed && !game.state.completed) ctl.feedback(game.state.lastEvent === "mistake" ? "error" : "place");
+  }
+  if (changed) afterAction("input");
+}
+
+function onCellTap(index) {
+  const s = ctl.settings();
+  ctl.select(index);
+  if (s.inputMode === "number-first" && ui.selectedDigit) {
+    applyDigit(index, ui.selectedDigit);
+    render();
     return;
   }
-
-  if (
-    !game.state.running &&
-    !game.state.completed &&
-    !ui.isModalOpen() &&
-    !pauseMenuOpen
-  ) {
-    openPauseMenu();
-  }
-}
-
-function handleSystemThemeChange() {
-  if (theme !== "auto") return;
-  applyTheme();
   render();
 }
 
-function initialGame() {
-  const restored = loadGame();
-  if (restored) {
-    if (!restored.state.completed) restored.resume();
-    return restored;
+function onDigit(digit) {
+  if (!playable()) return;
+  if (ctl.settings().inputMode === "number-first") {
+    ui.selectedDigit = ui.selectedDigit === digit ? null : digit;
+    ctl.feedback("tap");
+    render();
+    return;
   }
-  const fresh = Game.create("easy");
-  saveGame(fresh.toJSON());
-  return fresh;
+  const selected = ctl.selected();
+  if (selected === null) {
+    announce("Select a cell first.");
+    toast("Select a cell first");
+    return;
+  }
+  applyDigit(selected, digit);
 }
 
-applyTheme();
-game = initialGame();
-selectedDifficulty = game.state.difficulty;
-selectedIndex = firstEmptyIndex(game.state);
-ui = createUI({ root, dispatch });
-ui.setDifficulty(selectedDifficulty);
-render();
-save();
-lastSavedAt = Date.now();
-startTimerLoop();
-
-document.addEventListener("keydown", handleKeydown);
-document.addEventListener("visibilitychange", handleVisibilityChange);
-window.addEventListener("pagehide", save);
-
-if (typeof mediaQuery.addEventListener === "function") {
-  mediaQuery.addEventListener("change", handleSystemThemeChange);
-} else if (typeof mediaQuery.addListener === "function") {
-  mediaQuery.addListener(handleSystemThemeChange);
+function eraseSelected() {
+  const game = playable();
+  const selected = ctl.selected();
+  if (!game || selected === null) return;
+  if (game.erase(selected)) {
+    ctl.feedback("tap");
+    afterAction("erase");
+  }
 }
+
+function toggleNotesMode() {
+  ui.notesMode = !ui.notesMode;
+  announce(ui.notesMode ? "Notes on" : "Notes off");
+  render();
+}
+
+function undo() {
+  const game = ctl.current();
+  if (game && game.undo()) afterAction("undo");
+}
+
+function redo() {
+  const game = ctl.current();
+  if (game && game.redo()) afterAction("redo");
+}
+
+function openHint() {
+  const game = playable();
+  if (!game) return;
+  if (ui.hint && ui.hint.open) {
+    if (ui.hint.hint && ui.hint.step < 2) hintStep(ui.hint.step + 1);
+    else hintPanel.focus();
+    return;
+  }
+  const { values, notes, solution } = game.state;
+  const selected = ctl.selected();
+  const hint = getHint(values, notes, solution, selected === null ? {} : { focusIndex: selected });
+  ui.hint = { hint, step: 0, open: true };
+  hintPanel.show(hint, 0);
+  if (hint) {
+    game.hintShown(hint);
+    ctl.commit("hint");
+  } else {
+    render();
+  }
+  hintPanel.focus();
+}
+
+function hintStep(step) {
+  if (!ui.hint || !ui.hint.hint) return;
+  ui.hint.step = Math.min(2, step);
+  hintPanel.show(ui.hint.hint, ui.hint.step);
+  if (ui.hint.step === 2) ctl.select(ui.hint.hint.placement.index);
+  render();
+  hintPanel.focus();
+}
+
+function hintFill() {
+  const game = playable();
+  if (!game || !ui.hint || !ui.hint.hint) return closeHint();
+  const hint = ui.hint.hint;
+  if (game.applyHint(hint)) {
+    ctl.select(hint.placement.index);
+    if (!game.state.completed) ctl.feedback("place");
+    afterAction("hint");
+  } else {
+    closeHint();
+  }
+  board.focus();
+}
+
+function closeHint() {
+  ui.hint = null;
+  hintPanel.hide();
+  render();
+}
+
+async function restart() {
+  const game = ctl.current();
+  if (!game || ctl.loading()) return;
+  if (ctl.settings().confirmRestart) {
+    ctl.hold("dialog");
+    const ok = await confirmDialog({
+      title: "Restart this puzzle?",
+      body: "Your entries, notes, mistakes and time will be cleared. Assists already used still count.",
+      confirm: "Restart"
+    });
+    ctl.release("dialog");
+    if (!ok) return;
+  }
+  ui.hint = null;
+  hintPanel.hide();
+  ctl.actions.restart();
+}
+
+function onTool(id) {
+  switch (id) {
+    case "undo": return undo();
+    case "redo": return redo();
+    case "erase": return eraseSelected();
+    case "notes": return toggleNotesMode();
+    case "hint": return openHint();
+    case "check": {
+      if (!playable()) return;
+      const wrong = ctl.actions.check();
+      const msg = wrong.length
+        ? `${wrong.length} incorrect ${wrong.length === 1 ? "entry" : "entries"} marked`
+        : "No mistakes so far";
+      toast(msg);
+      announce(msg);
+      return;
+    }
+    case "autonotes":
+      if (!playable()) return;
+      ctl.actions.fillNotes();
+      toast("Notes filled in");
+      return;
+    case "restart": return restart();
+    default:
+  }
+}
+
+// ---- keyboard -------------------------------------------------------------------
+
+function modalOpen() {
+  if (menu.isOpen()) return true;
+  return [...document.querySelectorAll('[aria-modal="true"]')].some((n) => n.getClientRects().length > 0);
+}
+
+document.addEventListener("keydown", (event) => {
+  if (event.defaultPrevented || event.isComposing) return;
+  const target = event.target;
+  if (target instanceof HTMLElement && target.closest("input, textarea, select, [contenteditable='true']")) return;
+  const cmd = keyToCommand(event);
+  if (!cmd) return;
+  if (modalOpen()) {
+    if (cmd.type === "pause" && menu.isOpen()) {
+      event.preventDefault();
+      menu.close();
+    }
+    return;
+  }
+  event.preventDefault();
+  const selected = ctl.selected();
+  switch (cmd.type) {
+    case "digit":
+      if (selected === null) return onDigit(cmd.digit);
+      return applyDigit(selected, cmd.digit, cmd.note);
+    case "move":
+      ctl.select(moveIndex(selected, cmd.dr, cmd.dc));
+      render();
+      return board.focus();
+    case "erase": return eraseSelected();
+    case "toggleNotes": return toggleNotesMode();
+    case "undo": return undo();
+    case "redo": return redo();
+    case "hint": return openHint();
+    case "pause": return menu.open();
+    case "escape":
+      if (ui.hint && ui.hint.open) {
+        closeHint();
+        return board.focus();
+      }
+      if (ui.hint) return closeHint();
+      if (ui.selectedDigit) {
+        ui.selectedDigit = null;
+        return render();
+      }
+      return menu.open();
+    default:
+  }
+});
+
+// Keyboard focus entering the board (Tab) selects the focused cell.
+$("board").addEventListener("focusin", (event) => {
+  const cell = event.target.closest(".cell");
+  if (cell && Number(cell.dataset.index) !== ctl.selected() && event.target.matches(":focus-visible")) {
+    ctl.select(Number(cell.dataset.index));
+    render();
+  }
+});
+
+// ---- controller events ------------------------------------------------------------
+
+ctl.on("change", ({ reason, key } = {}) => {
+  if (reason === "settings") {
+    applySettings();
+    if (key === "inputMode") ui.selectedDigit = null;
+    if (key === "showMistakes" && ctl.settings().showMistakes) {
+      const game = ctl.current();
+      const n = game ? newlyShownErrors(game.state, ui.seenErrors) : 0;
+      if (n) {
+        game.markErrorsShown(n);
+        ctl.save();
+      }
+    }
+  }
+  if (reason === "restart") {
+    ui.flagged.clear();
+    ui.seenErrors = new Set();
+  }
+  render();
+  if (menu.isOpen()) menu.refresh();
+});
+
+ctl.on("check", (wrong) => {
+  const game = ctl.current();
+  if (!game) return;
+  for (const i of wrong) ui.flagged.set(i, game.state.values[i]);
+  render();
+});
+
+ctl.on("loading", (loading) => {
+  const node = $("loading");
+  node.hidden = !loading;
+  $("loading-text").textContent = loading ? loading.label : "";
+  $("app").dataset.loading = loading ? "true" : "false";
+});
+
+ctl.on("win", (result) => {
+  ui.hint = null;
+  ui.selectedDigit = null;
+  hintPanel.hide();
+  render();
+  announce("Puzzle solved!");
+  const delay = html.dataset.motion === "reduce" ? 0 : 700;
+  setTimeout(() => win.show(result), delay);
+});
+
+ctl.on("error", (err) => {
+  toast("Something went wrong. Please try again.");
+  if (typeof console !== "undefined") console.error(err);
+});
+
+// ---- timer, autosave and app state ---------------------------------------------------
+
+let lastSave = 0;
+setInterval(() => {
+  const game = ctl.current();
+  if (!game || !game.state.running) return;
+  status.renderTime(game.tick());
+  const now = Date.now();
+  if (now - lastSave >= AUTOSAVE_MS) {
+    lastSave = now;
+    ctl.save();
+  }
+}, 250);
+
+let hiddenAt = null;
+platform.onAppStateChange((active) => {
+  if (!active) {
+    if (hiddenAt === null) hiddenAt = Date.now();
+    ctl.hold("hidden");
+    ctl.save();
+    return;
+  }
+  const away = hiddenAt === null ? 0 : Date.now() - hiddenAt;
+  hiddenAt = null;
+  const game = ctl.current();
+  // Brief switches resume silently; long absences come back to the pause menu.
+  if (away > HIDDEN_PAUSE_MS && game && !game.state.completed && !menu.isOpen() && !modalOpen()) menu.open();
+  ctl.release("hidden");
+  render();
+});
+window.addEventListener("pagehide", () => ctl.save());
+
+// ---- test hooks (ROADMAP §2.5) -----------------------------------------------------------
+
+if (params.get("test") === "1") {
+  window.__sudoku = {
+    state: () => ctl.game(),
+    load(puzzle, solution) {
+      ctl.loadPuzzle(puzzle, solution);
+      render();
+    },
+    fillAllBut(n) {
+      const game = ctl.current();
+      if (!game || game.state.completed) return;
+      const { values, solution } = game.state;
+      const open = values.flatMap((v, i) => (v !== solution[i] ? [i] : []));
+      const keep = Math.max(0, Math.min(open.length, Number(n) || 0));
+      for (const i of open.slice(0, open.length - keep)) game.enterDigit(i, solution[i], { cleanupNotes: true });
+      afterAction("test");
+    },
+    settings: () => ctl.settings()
+  };
+}
+
+// ---- start ---------------------------------------------------------------------------------
+
+applySettings();
+ctl
+  .init({ seed: params.get("seed"), difficulty: params.get("difficulty") })
+  .then(async () => {
+    if (!ctl.current()) await ctl.actions.newGame("easy");
+    render();
+    onboarding.maybeShow();
+    setTimeout(() => platform.registerServiceWorker(), 0);
+  });
