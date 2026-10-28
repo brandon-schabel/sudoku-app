@@ -3,8 +3,10 @@
  * capability is missing, and importing this module never touches
  * window/navigator, so it is safe to load under Node.
  *
- * Capacitor plugins are reached only through `window.Capacitor.Plugins`
- * (no bundler, no runtime dependency).
+ * Capacitor plugins are reached lazily through the global
+ * `window.Capacitor.registerPlugin(name)` proxy (no bundler, no runtime
+ * dependency). Names match the native `jsName`/`@CapacitorPlugin(name)`:
+ * Haptics, App, InAppReview.
  * @module platform
  */
 
@@ -21,6 +23,11 @@ function cap() {
 function plugin(name) {
   const c = cap();
   if (!c || !isNative()) return null;
+  try {
+    if (typeof c.registerPlugin === 'function') return c.registerPlugin(name) || null;
+  } catch {
+    /* fall through to the pre-registered map */
+  }
   return (c.Plugins && c.Plugins[name]) || null;
 }
 

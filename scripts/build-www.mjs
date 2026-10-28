@@ -15,7 +15,7 @@ import { computePrecache, rewriteSw } from './update-precache.mjs';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Paths copied verbatim (files or directories). Missing ones are skipped. */
-export const INCLUDE = ['index.html', 'styles.css', 'manifest.webmanifest', 'privacy.html', 'sw.js', 'src', 'assets/icons'];
+export const INCLUDE = ['index.html', 'styles.css', 'manifest.webmanifest', 'privacy.html', 'sw.js', 'src', 'styles', 'assets/icons'];
 
 /**
  * @param {string} [out] output directory (default <root>/www)
